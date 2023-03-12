@@ -1,0 +1,11 @@
+test.js
+node_modules/
+tmp/
+.npmrc
+db.sqlite3
+mte-relay-config.yaml
+Dockerfile
+dist/
+docker-compose.yml
+package-lock.json
+data/
