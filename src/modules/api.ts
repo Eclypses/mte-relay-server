@@ -5,37 +5,29 @@ import { createMteEncoder, createMteDecoder } from "mte-helpers";
 import { getNonce } from "../utils/nonce";
 
 /**
- * Create several middlewares for the server
+ * Protect API Routes that require x-mte-id header
  */
-export default function apiRoutes(
+export function protectedApiRoutes(
   fastify: FastifyInstance,
   options: {
-    accessToken: string;
-    companyName: string;
+    mteClientIdHeader: string;
   },
   done: any
 ) {
-  // echo endpoint
-  fastify.get(
-    "/api/echo/:msg",
-    (
-      request: FastifyRequest<{ Params: { msg: string } }>,
-      reply: FastifyReply
-    ) => {
-      reply.send({
-        echo: request.params.msg,
-        time: Date.now(),
-      });
+  // on every request
+  fastify.addHook("onRequest", (request, reply, done) => {
+    // create sessionId by combining HttpOnly cookie with clientId header
+    const clientIdHeader = request.headers[options.mteClientIdHeader];
+    if (!clientIdHeader) {
+      return reply
+        .code(400)
+        .send(`Missing ${options.mteClientIdHeader} header.`);
     }
-  );
 
-  // HEAD /api/mte-relay
-  fastify.head(
-    "/api/mte-relay",
-    (request: FastifyRequest, reply: FastifyReply) => {
-      reply.status(200).send();
-    }
-  );
+    request.sessionId = request.clientId + "|" + clientIdHeader;
+
+    done();
+  });
 
   // mte pair route
   const mtePairSchema = z.object({
@@ -48,6 +40,7 @@ export default function apiRoutes(
     "/api/mte-pair",
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
+        console.log(`request.sessionId: ${request.sessionId}`);
         // validate request includes clientID
         if (!request.clientId || !request.sessionId) {
           return reply.status(401).send("Unauthorized");
@@ -98,6 +91,42 @@ export default function apiRoutes(
         console.log(error);
         reply.status(500).send({ error: (error as Error).message });
       }
+    }
+  );
+
+  done();
+}
+
+/**
+ * Public API Routes
+ */
+export function anonymousApiRoutes(
+  fastify: FastifyInstance,
+  options: {
+    accessToken: string;
+    companyName: string;
+  },
+  done: any
+) {
+  // echo endpoint
+  fastify.get(
+    "/api/echo/:msg",
+    (
+      request: FastifyRequest<{ Params: { msg: string } }>,
+      reply: FastifyReply
+    ) => {
+      reply.send({
+        echo: request.params.msg,
+        time: Date.now(),
+      });
+    }
+  );
+
+  // HEAD /api/mte-relay
+  fastify.head(
+    "/api/mte-relay",
+    (request: FastifyRequest, reply: FastifyReply) => {
+      reply.status(200).send();
     }
   );
 

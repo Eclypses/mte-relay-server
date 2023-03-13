@@ -50,14 +50,6 @@ async function mteIdManager(
     // allows client can track the different MTE Relay servers it talks to
     reply.header(options.mteServerIdHeader, options.mteServerId);
 
-    // create clientId by combining HttpOnly cookie with clientId header
-    const clientIdHeader = request.headers[options.mteClientIdHeader];
-    if (!clientIdHeader) {
-      return reply
-        .code(400)
-        .send(`Missing ${options.mteClientIdHeader} header.`);
-    }
-
     const existingCookie = request.cookies[options.cookieName];
     let _id = null;
     if (existingCookie) {
@@ -87,7 +79,6 @@ async function mteIdManager(
 
     // decorate request object with "clientId" property
     request.clientId = id;
-    request.sessionId = id + "|" + clientIdHeader;
 
     done();
   });

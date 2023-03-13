@@ -21,6 +21,7 @@ function proxyHandler(
     repairCode: number;
     tempDirPath: string;
     outboundToken?: string;
+    mteClientIdHeader: string;
   },
   done: any
 ) {
@@ -29,6 +30,15 @@ function proxyHandler(
     if (!request.clientId) {
       return reply.status(401).send("Unauthorized");
     }
+    // create sessionId by combining HttpOnly cookie with clientId header
+    const clientIdHeader = request.headers[options.mteClientIdHeader];
+    if (!clientIdHeader) {
+      return reply
+        .code(400)
+        .send(`Missing ${options.mteClientIdHeader} header.`);
+    }
+
+    request.sessionId = request.clientId + "|" + clientIdHeader;
     request.recordMteUsage(request.clientId);
   });
 

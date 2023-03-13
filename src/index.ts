@@ -1,7 +1,7 @@
 import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 
-import api from "./modules/api";
+import { anonymousApiRoutes, protectedApiRoutes } from "./modules/api";
 import proxy from "./modules/proxy";
 import sqlite from "./modules/sqlite";
 import mteInit from "./modules/mte-init";
@@ -53,10 +53,15 @@ let server: FastifyInstance | null = null;
       mteServerId: SETTINGS.MTE_RELAY_SERVER_ID,
     });
 
-    // register api routes
-    await server.register(api, {
+    // register anonymous api routes
+    await server.register(anonymousApiRoutes, {
       accessToken: SETTINGS.GENERATE_MTE_REPORT_ACCESS_TOKEN,
       companyName: SETTINGS.LICENSE_COMPANY,
+    });
+
+    // register protected api routes
+    await server.register(protectedApiRoutes, {
+      mteClientIdHeader: SETTINGS.MTE_CLIENT_ID_HEADER,
     });
 
     // register pass-through routes
@@ -72,6 +77,7 @@ let server: FastifyInstance | null = null;
       contentTypeHeader: SETTINGS.MTE_ENCODED_CONTENT_TYPE_HEADER_NAME,
       repairCode: SETTINGS.REPAIR_REQUIRED_HTTP_CODE,
       tempDirPath: SETTINGS.TEMP_DIR_PATH,
+      mteClientIdHeader: SETTINGS.MTE_CLIENT_ID_HEADER,
     });
 
     await server.listen({ port: SETTINGS.PORT });
