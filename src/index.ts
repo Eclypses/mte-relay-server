@@ -67,12 +67,12 @@ let server: FastifyInstance | null = null;
     // register pass-through routes
     await server.register(passThrough, {
       routes: SETTINGS.PASS_THROUGH_ROUTES,
-      upstream: SETTINGS.HOST,
+      upstream: SETTINGS.UPSTREAM,
     });
 
     // register proxy
     await server.register(proxy, {
-      upstream: SETTINGS.HOST,
+      upstream: SETTINGS.UPSTREAM,
       httpMethods: SETTINGS.CORS_METHODS,
       contentTypeHeader: SETTINGS.MTE_ENCODED_CONTENT_TYPE_HEADER_NAME,
       repairCode: SETTINGS.REPAIR_REQUIRED_HTTP_CODE,
@@ -80,7 +80,7 @@ let server: FastifyInstance | null = null;
       mteClientIdHeader: SETTINGS.MTE_CLIENT_ID_HEADER,
     });
 
-    await server.listen({ port: SETTINGS.PORT });
+    await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });
     console.log("Server listening on: http://localhost:" + SETTINGS.PORT);
   } catch (err) {
     console.log(err);

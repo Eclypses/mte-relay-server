@@ -19,12 +19,12 @@ const persistentDir = path.join(process.cwd(), "data");
 
 // validate yaml file
 const yamlSchema = z.object({
-  host: z.string().url({ message: "Host must be a valid URL." }),
+  upstream: z.string().url({ message: "upstream must be a valid URL." }),
   licenseCompany: z.string(),
   licenseKey: z.string(),
   cookieSecret: z.string(),
   corsOrigins: z.array(
-    z.string().url({ message: "CORS origins must be valid URLs." })
+    z.string().url({ message: "corsOrigin must be a valid URL." })
   ),
   reportAccessToken: z.string(),
   port: z.number().optional(),
@@ -46,7 +46,7 @@ export default {
   MTE_CLIENT_ID_HEADER: `x-mte-client-id`,
   MTE_ENCODED_CONTENT_TYPE_HEADER_NAME: "x-mte-cth",
   PORT: validatedYaml.port || 8080,
-  HOST: validatedYaml.host,
+  UPSTREAM: validatedYaml.upstream,
   LICENSE_COMPANY: validatedYaml.licenseCompany,
   LICENSE_KEY: validatedYaml.licenseKey,
   CORS_ORIGINS: validatedYaml.corsOrigins,

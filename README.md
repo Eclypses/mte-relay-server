@@ -6,9 +6,9 @@ The MTE Relay Server is a NodeJS server that proxies HTTP requests that have bee
 
 The configuration file is a YAML file that contains the following properties. Examples are shown below.
 
-- `host`
+- `upstream`
   - **Required**
-  - The host application that inbound requests will be proxied to.
+  - The upstream application that inbound requests will be proxied to.
 - `licenseCompany`
   - **Required**
   - Your company name. See your project settings in the [Eclypses Developer's Portal](https://developers.eclypses.com).
@@ -31,7 +31,7 @@ The configuration file is a YAML file that contains the following properties. Ex
   - A flag that enables debug logging.
   - Default: `false`
 - `passThroughRoutes`
-  - A list of routes that will be passed through to the host application without being MTE encoded/decoded.
+  - A list of routes that will be passed through to the upstream application without being MTE encoded/decoded.
 - `cookieName`
   - The name of the cookie that will be used to store the MTE session.
   - Default: `mte-relay-client-id`.
@@ -46,7 +46,7 @@ The configuration file is a YAML file that contains the following properties. Ex
 #### Minimal Configuration Example
 
 ```yaml
-host: https://api.my-company.com
+upstream: https://api.my-company.com
 licenseCompany: My Company, LLC.
 licenseKey: 4vHSvWLTRvwx+JoThgT0p0kE
 cookieSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
@@ -59,7 +59,7 @@ reportAccessToken: x5l2212bAGAj81pAMm6bcB1tRipZjpDg
 #### Full Configuration Example
 
 ```yaml
-host: https://api.my-company.com
+upstream: https://api.my-company.com
 licenseCompany: My Company, LLC.
 licenseKey: 4vHSvWLTRvwx+JoThgT0p0kE
 cookieSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
