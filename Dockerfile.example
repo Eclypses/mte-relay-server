@@ -1,0 +1,19 @@
+FROM node:18-alpine
+
+# create this directory inside our custom image
+WORKDIR /mte-relay-server
+
+# Clone mte-relay-server 
+COPY ./dist/index.js ./index.js
+COPY ./package.json ./package.json
+
+# Copy MTE
+COPY .npmrc .
+
+# Install MTE
+RUN npm i mte@npm:____MTE_PACKAGE_HERE_____
+
+# Expose port
+EXPOSE 8080
+
+CMD ["node","index.js"]

@@ -41,5 +41,9 @@
   },
   "peerDependencies": {
     "mte": "npm:@eclypses/mte"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Eclypses/mte-relay-server"
   }
 }

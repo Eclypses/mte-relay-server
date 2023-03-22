@@ -2,7 +2,19 @@
 
 The MTE Relay Server is a NodeJS server that proxies HTTP requests that have been MTE encoded.
 
-## mte-relay-config.yaml
+### Installation
+
+MTE Relay Server consists of several configuration files, and to make the setup process easier, we released a CLI tool that can scaffold the project for you. Run the below command where you would like to create the MTE Relay Server directory.
+
+`npx create-mte-relay-server`
+
+Next, configure the `mte-relay-config.yaml` file to match your application's requirements. Finally, choose a Docker implementation or a local implementation.
+
+### Config File
+
+In the newly created directory is an `mte-relay-config.yaml` file with various configuration options for your instance of MTE Relay Server. Edit the file to match your application's requirements.
+
+#### Configuration Options
 
 The configuration file is a YAML file that contains the following properties. Examples are shown below.
 
@@ -79,3 +91,31 @@ corsMethods:
   - DELETE
 redisConnectionString: redis://localhost:6379
 ```
+
+### Docker Implementation
+
+To run MTE Relay Server in a Docker container, follow these instructions:
+
+- Update the `.npmrc` file with youR auth token. This can be found in the Eclypses Developer Portal.
+- Update the `Dockerfile` with your MTE library package name
+- Update the `docker-compose.yml` file with
+  - A local directory that can be used to persist application data
+  - The absolute path to your `mte-relay-config.yaml` file
+- Build the Docker image with `docker build . -t mte-relay-server`
+- Run the Docker container with the command `docker compose up`
+
+### Local Implementation
+
+To run MTE Relay Server locally on your hardware, follow these instructions:
+
+- Install your MTE library package. This can be found in the Eclypses Developer Portal.
+  - Example: `npm i mte@npm:@eclypses/my-mte-library`
+- Start the proxy server with `npm run start`
+
+### Local Development
+
+- Create a `.npmrc` file in the root of the project with the following contents. Include credentials from developer portal.
+- Install your MTE library package. This can be found in the Eclypses Developer Portal.
+  - Example: `npm i mte@npm:@eclypses/my-mte-library`
+- Create a `mte-relay-config.yaml` file in the root of the project. See the [Config File](#config-file) section for more information.
+- Run `npm run dev` to start the server in development mode.
