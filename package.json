@@ -39,9 +39,6 @@
     "nodemon": "^2.0.20",
     "ts-node": "^10.9.1"
   },
-  "peerDependencies": {
-    "mte": "npm:@eclypses/mte"
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/Eclypses/mte-relay-server"
