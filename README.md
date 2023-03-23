@@ -116,6 +116,6 @@ To run MTE Relay Server locally on your hardware, follow these instructions:
 
 - Create a `.npmrc` file in the root of the project with the following contents. Include credentials from developer portal.
 - Install your MTE library package. This can be found in the Eclypses Developer Portal.
-  - Example: `npm i mte@npm:@eclypses/my-mte-library`
+  - Example: `npm i mte@npm:@eclypses/my-mte-library --no-save`
 - Create a `mte-relay-config.yaml` file in the root of the project. See the [Config File](#config-file) section for more information.
 - Run `npm run dev` to start the server in development mode.
