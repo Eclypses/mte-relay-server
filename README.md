@@ -6,7 +6,7 @@ The MTE Relay Server is a NodeJS server that proxies HTTP requests that have bee
 
 MTE Relay Server consists of several configuration files, and to make the setup process easier, we released a CLI tool that can scaffold the project for you. Run the below command where you would like to create the MTE Relay Server directory.
 
-`npx create-mte-relay-server`
+`npx create-mte-relay-server@latest`
 
 Next, configure the `mte-relay-config.yaml` file to match your application's requirements. Finally, choose a Docker implementation or a local implementation.
 

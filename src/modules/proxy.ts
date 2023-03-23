@@ -272,6 +272,7 @@ function proxyHandler(
         } catch (error: any) {
           const headers = error.response?.headers;
           if (headers) {
+            delete headers["access-control-allow-origin"];
             reply.headers(headers);
           }
           const status = error.response?.status;
@@ -279,7 +280,6 @@ function proxyHandler(
           if (status) {
             return reply.status(status).send(body || undefined);
           }
-          console.log(error);
           let message = "Unknown error";
           if (error.message) {
             message = error.message;
@@ -293,6 +293,8 @@ function proxyHandler(
 
         // copy proxyResponse headers to reply
         const responseHeaders = { ...proxyResponse.headers };
+        // delete CORs headers from upstream
+        delete responseHeaders["access-control-allow-origin"];
         delete responseHeaders["content-length"]; // this will be set automatically
         reply.headers(responseHeaders);
 
