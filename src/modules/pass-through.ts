@@ -64,6 +64,8 @@ async function passThroughRoutes(
           url: options.upstream + request.url,
           headers: proxyHeaders,
           data: request.body,
+          maxRedirects: 0,
+          validateStatus: () => true,
           transformRequest: [
             (data, _headers) => {
               // no transform
@@ -79,6 +81,7 @@ async function passThroughRoutes(
         });
 
         reply.headers(proxyResponse.headers);
+        reply.status(proxyResponse.status);
 
         // return response
         return reply.send(proxyResponse.data);

@@ -92,7 +92,6 @@ function proxyHandler(
         // create headers from original request
         const proxyHeaders = { ...request.headers };
         delete proxyHeaders[options.contentTypeHeader];
-        delete proxyHeaders.host;
         delete proxyHeaders["content-length"]; // this will be set automatically
 
         // set decoded payload to this variable
@@ -265,6 +264,8 @@ function proxyHandler(
             url: options.upstream + request.url,
             headers: proxyHeaders,
             data: proxyPayload,
+            maxRedirects: 0,
+            validateStatus: () => true,
             transformResponse: (data, _headers) => {
               return data; // prevents auto JSON parsing
             },
