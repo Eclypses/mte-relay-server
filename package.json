@@ -41,7 +41,7 @@
     "mte": "npm@eclypses/mte"
   },
   "peerDependencies": {
-    "mte": "npm@eclypses/mte"
+    "mte": "2 - 3"
   },
   "repository": {
     "type": "git",
