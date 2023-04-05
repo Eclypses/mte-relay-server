@@ -163,7 +163,7 @@ function getTotalMteUseCountByMonth(month: number, year: number) {
         if (err) {
           reject(err);
         } else {
-          resolve(row.total || 0);
+          resolve((row as any).total || 0);
         }
       }
     );
@@ -183,7 +183,7 @@ function getTotalClientsByMonth(month: number, year: number) {
         if (err) {
           reject(err);
         } else {
-          resolve(row.total);
+          resolve((row as any).total);
         }
       }
     );
