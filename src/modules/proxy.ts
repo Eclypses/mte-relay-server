@@ -92,6 +92,7 @@ function proxyHandler(
         // create headers from original request
         const proxyHeaders = { ...request.headers };
         delete proxyHeaders[options.contentTypeHeader];
+        delete proxyHeaders.host;
         delete proxyHeaders["content-length"]; // this will be set automatically
 
         // set decoded payload to this variable
