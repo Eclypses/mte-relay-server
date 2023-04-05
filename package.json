@@ -1,6 +1,6 @@
 {
   "name": "mte-relay-server",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "",
   "scripts": {
     "dev": "nodemon src/index.ts",
@@ -38,7 +38,7 @@
     "@types/sqlite3": "^3.1.8",
     "nodemon": "^2.0.20",
     "ts-node": "^10.9.1",
-    "mte": "npm@eclypses/mte"
+    "mte": "*"
   },
   "peerDependencies": {
     "mte": "2 - 3"
