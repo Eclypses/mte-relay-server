@@ -80,6 +80,9 @@ async function passThroughRoutes(
           ],
         });
 
+        delete proxyResponse.headers["access-control-allow-origin"];
+        delete proxyResponse.headers["access-control-allow-methods"];
+
         reply.headers(proxyResponse.headers);
         reply.status(proxyResponse.status);
 
