@@ -293,10 +293,11 @@ function proxyHandler(
           return reply.status(500).send("No Response.");
         }
 
-        // delete CORs headers from upstream
+        // delete CORs headers from upstream, we set our own
         delete proxyResponse.headers["access-control-allow-origin"];
         delete proxyResponse.headers["access-control-allow-methods"];
         delete proxyResponse.headers["content-length"];
+        delete proxyResponse.headers["transfer-encoding"];
 
         // copy proxyResponse headers to reply
         reply.headers(proxyResponse.headers);
