@@ -3,7 +3,7 @@ node_modules/
 tmp/
 .npmrc
 db.sqlite3
-mte-relay-config.yaml
+mte-relay-config*
 Dockerfile
 dist/
 docker-compose.yml

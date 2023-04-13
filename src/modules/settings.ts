@@ -34,6 +34,7 @@ const yamlSchema = z.object({
   corsMethods: z.array(z.string()).optional(),
   redisConnectionString: z.string().optional(),
   outboundProxyBearerToken: z.string().optional(),
+  maxFormDataSize: z.number().optional(),
 });
 
 // validate yaml file has everything needed
@@ -68,4 +69,5 @@ export default {
   OUTBOUND_PROXY_BEARER_TOKEN: validatedYaml.outboundProxyBearerToken,
   PASS_THROUGH_ROUTES: validatedYaml.passThroughRoutes || [],
   PERSISTENT_DIR: persistentDir,
+  MAX_FORM_DATA_SIZE: validatedYaml.maxFormDataSize || 1024 * 1024 * 20, // 20mb
 } as const;

@@ -40,7 +40,6 @@ export function protectedApiRoutes(
     "/api/mte-pair",
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        console.log(`request.sessionId: ${request.sessionId}`);
         // validate request includes clientID
         if (!request.clientId || !request.sessionId) {
           return reply.status(401).send("Unauthorized");

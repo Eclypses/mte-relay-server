@@ -78,6 +78,7 @@ let server: FastifyInstance | null = null;
       repairCode: SETTINGS.REPAIR_REQUIRED_HTTP_CODE,
       tempDirPath: SETTINGS.TEMP_DIR_PATH,
       mteClientIdHeader: SETTINGS.MTE_CLIENT_ID_HEADER,
+      maxFormDataSize: SETTINGS.MAX_FORM_DATA_SIZE,
     });
 
     await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });

@@ -22,6 +22,7 @@ function proxyHandler(
     tempDirPath: string;
     outboundToken?: string;
     mteClientIdHeader: string;
+    maxFormDataSize: number;
   },
   done: any
 ) {
@@ -43,7 +44,11 @@ function proxyHandler(
   });
 
   // parse multipart/form-data requests
-  fastify.register(multipart, {});
+  fastify.register(multipart, {
+    limits: {
+      fileSize: options.maxFormDataSize,
+    },
+  });
 
   // if not multipart/form-data, put entire buffer on request.body, and handle decode in handler
   fastify.addContentTypeParser("*", function (request, payload, done) {
@@ -266,6 +271,7 @@ function proxyHandler(
             headers: proxyHeaders,
             data: proxyPayload,
             maxRedirects: 0,
+            responseType: "arraybuffer",
             validateStatus: () => true,
             transformResponse: (data, _headers) => {
               return data; // prevents auto JSON parsing

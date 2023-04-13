@@ -65,6 +65,7 @@ async function passThroughRoutes(
           headers: proxyHeaders,
           data: request.body,
           maxRedirects: 0,
+          responseType: "arraybuffer",
           validateStatus: () => true,
           transformRequest: [
             (data, _headers) => {
