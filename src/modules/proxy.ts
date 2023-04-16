@@ -272,10 +272,8 @@ function proxyHandler(
             data: proxyPayload,
             maxRedirects: 0,
             responseType: "arraybuffer",
-            validateStatus: () => true,
-            transformResponse: (data, _headers) => {
-              return data; // prevents auto JSON parsing
-            },
+            validateStatus: (status) => status < 400,
+            transformResponse: (data, _headers) => data,
           });
         } catch (error: any) {
           const headers = error.response?.headers;

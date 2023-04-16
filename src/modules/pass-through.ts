@@ -43,19 +43,7 @@ async function passThroughRoutes(
         }
 
         // clone headers
-        const proxyHeaders: Record<string, string> = {};
-        Object.entries(request.headers).forEach(([key, value]) => {
-          if (Array.isArray(value)) {
-            value.forEach((v) => {
-              proxyHeaders[key] = v;
-            });
-            return;
-          }
-          if (typeof value === "string") {
-            proxyHeaders[key] = value;
-            return;
-          }
-        });
+        const proxyHeaders = { ...request.headers };
         delete proxyHeaders.host;
 
         // proxy request
@@ -66,7 +54,7 @@ async function passThroughRoutes(
           data: request.body,
           maxRedirects: 0,
           responseType: "arraybuffer",
-          validateStatus: () => true,
+          validateStatus: (status) => status < 400,
           transformRequest: [
             (data, _headers) => {
               // no transform
@@ -92,7 +80,11 @@ async function passThroughRoutes(
         return reply.send(proxyResponse.data);
       } catch (error) {
         console.log(error);
-        reply.status(500).send("failed");
+        let message = "An unknown error occurred";
+        if (error instanceof Error) {
+          message = error.message;
+        }
+        reply.status(500).send(message);
       }
     });
   });
