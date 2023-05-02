@@ -1,6 +1,6 @@
 {
   "name": "mte-relay-server",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "",
   "scripts": {
     "dev": "nodemon src/index.ts",
@@ -34,11 +34,10 @@
   },
   "devDependencies": {
     "@types/form-data": "^2.5.0",
-    "@types/node": "^18.11.18",
     "@types/sqlite3": "^3.1.8",
+    "mte": "npm:@eclypses/tblackman-llc-mte-relay-demo-sales-demo-mte-relay@^3.1.2",
     "nodemon": "^2.0.20",
-    "ts-node": "^10.9.1",
-    "mte": "^3.0.0"
+    "ts-node": "^10.9.1"
   },
   "repository": {
     "type": "git",

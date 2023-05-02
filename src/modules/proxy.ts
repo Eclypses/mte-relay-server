@@ -11,6 +11,7 @@ import axios, { AxiosResponse } from "axios";
 import fs from "fs";
 import path from "path";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
+import { mergeHeaders } from "../utils/header-utils";
 
 function proxyHandler(
   fastify: FastifyInstance,
@@ -53,7 +54,7 @@ function proxyHandler(
   // if not multipart/form-data, put entire buffer on request.body, and handle decode in handler
   fastify.addContentTypeParser("*", function (request, payload, done) {
     // parse data
-    let _buffer = new Uint8Array();
+    let _buffer = new Uint8Array(0);
     payload.on("data", (chunk: Uint8Array) => {
       _buffer = concatTwoUint8Arrays(_buffer, chunk);
     });
@@ -88,14 +89,18 @@ function proxyHandler(
           if (bearerToken && bearerToken !== options.outboundToken) {
             return reply.status(401).send("Unauthorized");
           }
-
-          // this is an outbound proxy, so we need to encode the payload
-          // const encodedHeaders = await encodeHeaders(request.headers);
-          // const encodedBody = await encodeBody(request.body);
         }
 
         // create headers from original request
-        const proxyHeaders = { ...request.headers };
+        const proxyHeaders = mergeHeaders(
+          request.headers,
+          {
+            [options.mteClientIdHeader]: request.clientId!,
+            [options.contentTypeHeader]:
+              request.headers[options.contentTypeHeader],
+          },
+          "REMOVE"
+        );
         delete proxyHeaders[options.contentTypeHeader];
         delete proxyHeaders.host;
         delete proxyHeaders["content-length"]; // this will be set automatically
@@ -297,18 +302,23 @@ function proxyHandler(
           return reply.status(500).send("No Response.");
         }
 
-        // delete CORs headers from upstream, we set our own
-        delete proxyResponse.headers["access-control-allow-origin"];
-        delete proxyResponse.headers["access-control-allow-methods"];
-        delete proxyResponse.headers["content-length"];
-        delete proxyResponse.headers["transfer-encoding"];
+        // create headers from original request
+        const replyHeaders = mergeHeaders(
+          // @ts-ignore
+          proxyResponse.headers!,
+          reply.getHeaders(),
+          "ADD"
+        );
+
+        delete replyHeaders["content-length"];
+        delete replyHeaders["transfer-encoding"];
 
         // copy proxyResponse headers to reply
-        reply.headers(proxyResponse.headers);
+        reply.headers(replyHeaders);
         reply.status(proxyResponse.status);
 
         // encode response content-type header
-        const _contentType = proxyResponse.headers["content-type"];
+        const _contentType = replyHeaders["content-type"];
         if (_contentType) {
           const encodedContentType = await mteEncode(_contentType, {
             id: `encoder_${request.sessionId}`,
@@ -371,9 +381,3 @@ function contentTypeIsText(contentType: string) {
   }
   return false;
 }
-
-// copy and decode headers
-async function encodeHeaders(headers: FastifyRequest["headers"]) {}
-
-// copy and encode body
-async function encodeBody() {}
