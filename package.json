@@ -1,6 +1,6 @@
 {
   "name": "mte-relay-server",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "",
   "scripts": {
     "dev": "nodemon src/index.ts",

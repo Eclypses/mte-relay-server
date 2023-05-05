@@ -11,7 +11,7 @@ import axios, { AxiosResponse } from "axios";
 import fs from "fs";
 import path from "path";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
-import { mergeHeaders } from "../utils/header-utils";
+import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
 
 function proxyHandler(
   fastify: FastifyInstance,
@@ -91,19 +91,12 @@ function proxyHandler(
           }
         }
 
-        // create headers from original request
-        const proxyHeaders = mergeHeaders(
-          request.headers,
-          {
-            [options.mteClientIdHeader]: request.clientId!,
-            [options.contentTypeHeader]:
-              request.headers[options.contentTypeHeader],
-          },
-          "REMOVE"
-        );
+        // set headers for proxy request
+        const proxyHeaders = cloneHeaders(request.headers);
+        delete proxyHeaders[options.mteClientIdHeader];
         delete proxyHeaders[options.contentTypeHeader];
-        delete proxyHeaders.host;
-        delete proxyHeaders["content-length"]; // this will be set automatically
+        delete proxyHeaders["content-length"];
+        proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
 
         // set decoded payload to this variable
         let proxyPayload: any = undefined;
@@ -203,8 +196,8 @@ function proxyHandler(
                 filename: decodedFileName,
               });
             }
-          } catch (err) {
-            console.log(err);
+          } catch (error) {
+            console.log(error);
             return reply.status(options.repairCode).send();
           }
 
@@ -302,23 +295,50 @@ function proxyHandler(
           return reply.status(500).send("No Response.");
         }
 
-        // create headers from original request
-        const replyHeaders = mergeHeaders(
-          // @ts-ignore
-          proxyResponse.headers!,
-          reply.getHeaders(),
-          "ADD"
+        // create response headers
+        proxyResponse.headers["access-control-allow-credentials"] = "true";
+        proxyResponse.headers["access-control-allow-methods"] = reply.getHeader(
+          "access-control-allow-methods"
         );
-
-        delete replyHeaders["content-length"];
-        delete replyHeaders["transfer-encoding"];
+        proxyResponse.headers[options.mteClientIdHeader] = request.sessionId!;
+        // @ts-ignore
+        const proxyResponseHeaders = cloneHeaders(proxyResponse.headers);
+        // merge these headers with upstream server headers, if present
+        proxyResponseHeaders["access-control-allow-headers"] = (() => {
+          let value: string[] = [];
+          const replyHeader = reply.getHeader("access-control-allow-headers");
+          if (replyHeader) {
+            value.push(makeHeaderAString(replyHeader));
+          }
+          const proxyResponseHeader =
+            proxyResponse.headers["access-control-allow-headers"];
+          if (proxyResponseHeader) {
+            value.push(makeHeaderAString(proxyResponseHeader));
+          }
+          return value.join(", ");
+        })();
+        proxyResponseHeaders["access-control-expose-headers"] = (() => {
+          let value: string[] = [];
+          const replyHeader = reply.getHeader("access-control-expose-headers");
+          if (replyHeader) {
+            value.push(makeHeaderAString(replyHeader));
+          }
+          const proxyResponseHeader =
+            proxyResponse.headers["access-control-expose-headers"];
+          if (proxyResponseHeader) {
+            value.push(makeHeaderAString(proxyResponseHeader));
+          }
+          return value.join(", ");
+        })();
+        delete proxyResponseHeaders["content-length"];
+        delete proxyResponseHeaders["transfer-encoding"];
 
         // copy proxyResponse headers to reply
-        reply.headers(replyHeaders);
+        reply.headers(proxyResponseHeaders);
         reply.status(proxyResponse.status);
 
         // encode response content-type header
-        const _contentType = replyHeaders["content-type"];
+        const _contentType = proxyResponseHeaders["content-type"];
         if (_contentType) {
           const encodedContentType = await mteEncode(_contentType, {
             id: `encoder_${request.sessionId}`,
