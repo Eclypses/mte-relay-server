@@ -10,22 +10,15 @@ import { getNonce } from "../utils/nonce";
 export function protectedApiRoutes(
   fastify: FastifyInstance,
   options: {
-    mteClientIdHeader: string;
+    clientIdHeader: string;
   },
   done: any
 ) {
   // on every request
   fastify.addHook("onRequest", (request, reply, done) => {
-    // create sessionId by combining HttpOnly cookie with clientId header
-    const clientIdHeader = request.headers[options.mteClientIdHeader];
-    if (!clientIdHeader) {
-      return reply
-        .code(400)
-        .send(`Missing ${options.mteClientIdHeader} header.`);
+    if (!request.clientId) {
+      return reply.code(400).send(`Missing ${options.clientIdHeader} header.`);
     }
-
-    request.sessionId = request.clientId + "|" + clientIdHeader;
-
     done();
   });
 
@@ -40,11 +33,6 @@ export function protectedApiRoutes(
     "/api/mte-pair",
     async (request: FastifyRequest, reply: FastifyReply) => {
       try {
-        // validate request includes clientID
-        if (!request.clientId || !request.sessionId) {
-          return reply.status(401).send("Unauthorized");
-        }
-
         // validate request body
         const validationResult = mtePairSchema.safeParse(request.body);
         if (!validationResult.success) {

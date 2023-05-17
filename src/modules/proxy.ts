@@ -18,11 +18,12 @@ function proxyHandler(
   options: {
     upstream: string;
     httpMethods: string[];
-    contentTypeHeader: string;
     repairCode: number;
     tempDirPath: string;
     outboundToken?: string;
-    mteClientIdHeader: string;
+    clientIdHeader: string;
+    sessionIdHeader: string;
+    encodedHeadersHeader: string;
     maxFormDataSize: number;
   },
   done: any
@@ -32,15 +33,6 @@ function proxyHandler(
     if (!request.clientId) {
       return reply.status(401).send("Unauthorized");
     }
-    // create sessionId by combining HttpOnly cookie with clientId header
-    const clientIdHeader = request.headers[options.mteClientIdHeader];
-    if (!clientIdHeader) {
-      return reply
-        .code(400)
-        .send(`Missing ${options.mteClientIdHeader} header.`);
-    }
-
-    request.sessionId = request.clientId + "|" + clientIdHeader;
     request.recordMteUsage(request.clientId);
   });
 
@@ -73,13 +65,6 @@ function proxyHandler(
   fastify.route({
     method: methods as HTTPMethods[],
     url: "*",
-    onRequest: (request: FastifyRequest, reply: FastifyReply, done: any) => {
-      // validate request includes clientID
-      if (!request.clientId) {
-        return reply.status(401).send("Unauthorized");
-      }
-      done();
-    },
     handler: async (request: FastifyRequest, reply: FastifyReply) => {
       try {
         // determine if authorized outbound-proxy, or if inbound-proxy
@@ -93,8 +78,8 @@ function proxyHandler(
 
         // set headers for proxy request
         const proxyHeaders = cloneHeaders(request.headers);
-        delete proxyHeaders[options.mteClientIdHeader];
-        delete proxyHeaders[options.contentTypeHeader];
+        delete proxyHeaders[options.clientIdHeader];
+        delete proxyHeaders[options.sessionIdHeader];
         delete proxyHeaders["content-length"];
         proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
 
@@ -214,26 +199,27 @@ function proxyHandler(
          * Handle NON-multipart/form-data requests
          */
         if (Boolean(request.body) && !isMultipart) {
-          const encodedContentType = request.headers[options.contentTypeHeader];
-          let decodedContentType: string = contentType || "";
-          if (encodedContentType) {
-            try {
-              decodedContentType = await mteDecode(
-                encodedContentType as string,
-                {
-                  id: `decoder_${request.sessionId}`,
-                  sequenceWindow: -63,
-                  timestampWindow: 1000,
-                  keepAlive: 1000,
-                }
-              );
-            } catch (error) {
-              console.log(error);
-              return reply.status(options.repairCode).send();
-            }
+          // decode headers
+          const encodedHeaders = request.headers[
+            options.encodedHeadersHeader
+          ] as string;
+          if (!encodedHeaders) {
+            return reply
+              .status(400)
+              .send(`Missing ${options.encodedHeadersHeader} header.`);
           }
+          const decodedHeaders = await mteDecode(encodedHeaders, {
+            id: `decoder_${request.sessionId}`,
+            output: "str",
+          });
+          const headers = JSON.parse(decodedHeaders);
+          Object.entries(headers).forEach((header) => {
+            proxyHeaders[header[0]] = header[1] as string;
+          });
 
           // decode incoming payload
+          const contentType =
+            request.headers["content-type"] || "application/json";
           let decodedPayload: any = request.body;
           if (request.body) {
             try {
@@ -243,18 +229,13 @@ function proxyHandler(
                 sequenceWindow: -63,
                 keepAlive: 1000,
                 // @ts-ignore
-                output: contentTypeIsText(decodedContentType)
-                  ? "str"
-                  : "Uint8Array",
+                output: contentTypeIsText(contentType) ? "str" : "Uint8Array",
               });
             } catch (error) {
               console.log(error);
               return reply.status(options.repairCode).send();
             }
           }
-
-          // set content-type header
-          proxyHeaders["content-type"] = decodedContentType;
 
           // set decoded payload to proxyPayload
           proxyPayload = decodedPayload;
@@ -300,7 +281,7 @@ function proxyHandler(
         proxyResponse.headers["access-control-allow-methods"] = reply.getHeader(
           "access-control-allow-methods"
         );
-        proxyResponse.headers[options.mteClientIdHeader] = request.sessionId!;
+
         // @ts-ignore
         const proxyResponseHeaders = cloneHeaders(proxyResponse.headers);
         // merge these headers with upstream server headers, if present
@@ -337,16 +318,6 @@ function proxyHandler(
         reply.headers(proxyResponseHeaders);
         reply.status(proxyResponse.status);
 
-        // encode response content-type header
-        const _contentType = proxyResponseHeaders["content-type"];
-        if (_contentType) {
-          const encodedContentType = await mteEncode(_contentType, {
-            id: `encoder_${request.sessionId}`,
-            output: "B64",
-          });
-          reply.header(options.contentTypeHeader, encodedContentType);
-        }
-
         // if no body, send reply
         const _body = proxyResponse.data;
         if (!_body) {
@@ -359,8 +330,6 @@ function proxyHandler(
           output: "Uint8Array",
         });
         const _buffer = Buffer.from(encodedBody);
-
-        reply.header("Content-Type", "application/octet-stream");
         reply.send(_buffer);
 
         // delete tmp files if they exist

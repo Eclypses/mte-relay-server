@@ -1,0 +1,35 @@
+headers: 
+x-mte-relay-server-id
+	- issued by the server
+	- always the same
+	- identifies the server, so that the client can manage connections with multiple servers (this can also be accomplished with a fully-qualifed url)
+x-mte-relay-client-id
+	- issued by the server
+	- signed with a secret
+	- client must include this on every request
+	- used by the server to identify unique clients
+x-mte-relay-session-id
+	- issued by the client
+	- optional
+	- if included, the server will create a new encoder/decoder pair using the session-id+client-id headers.
+x-mte-relay-eh: 
+	- MKE encrypted headers
+	- this should always include Content-Type
+
+When creating encoded headers:
+if mteOptions.encodeHeaders === false
+	return headers
+if mteOptions.encodeHeaders === true
+	create an object with all headers as key:value pairs
+	convert the object to a string (JSON)
+	mke Encrypt the string
+if mteOptions.encodeHeaders === Array
+	check if all items in array are strings
+		if not, throw error
+	create object to store headers as key:value pairs
+	for each string in array
+		check if it exists in headers
+			if it does, add it as a key:value pair to a headers
+	convert the object to a string (JSON)
+	mkeEncrypt string
+

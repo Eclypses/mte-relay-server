@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
 import fastifyPlugin from "fastify-plugin";
-import cookie from "@fastify/cookie";
 import crypto from "crypto";
+import { signAString, verifySignedString } from "../utils/signed-ids";
 
 // extend FastifyRequest interface with decorator method
 declare module "fastify" {
@@ -13,72 +13,62 @@ declare module "fastify" {
 
 /**
  * - Add MTE Server ID to every reply
- * - Set/Refresh MTE Client ID cookie on every request
+ * - Set/Refresh MTE Client ID header on every request
  * - Decorate every request with "clientId" property
- *    - clientId = MTE Client ID cookie
- *    - sessionId = MTE Client ID cookie + MTE Client ID header
+ *    - clientId = MTE Client ID header
+ *    - sessionId = MTE Client ID header + MTE Client ID header
  *        - sessionId allows new Encoder/Decoders for each separate tab/window of a website user
  */
 async function mteIdManager(
   fastify: FastifyInstance,
   options: {
-    cookieSecret: string;
-    cookieName: string;
-    mteClientIdHeader: string;
-    mteServerIdHeader: string;
+    clientIdSecret: string;
+    clientIdHeader: string;
+    sessionIdHeader: string;
+    serverIdHeader: string;
     mteServerId: string;
   },
   done: any
 ) {
-  // register cookie plugin
-  fastify.register(cookie, {
-    secret: options.cookieSecret,
-    parseOptions: {
-      signed: true,
-      secure: true,
-      httpOnly: true,
-      sameSite: "none",
-    },
-  });
-
   // decorate request object with clientId
   fastify.decorateRequest("clientId", null);
+  fastify.decorateRequest("sessionId", null);
 
   // on every request
   fastify.addHook("onRequest", (request, reply, done) => {
-    // add server ID header to the response
-    // allows client can track the different MTE Relay servers it talks to
-    reply.header(options.mteServerIdHeader, options.mteServerId);
+    // add x-mte-relay-server-id header to the every response
+    reply.header(options.serverIdHeader, options.mteServerId);
 
-    const existingCookie = request.cookies[options.cookieName];
-    let _id = null;
-    if (existingCookie) {
-      // validate cookie
-      const unsigned = fastify.unsignCookie(existingCookie);
-      if (!unsigned.valid || !unsigned.value) {
-        reply.clearCookie(options.cookieName, { path: "/" });
-        return reply.code(400).send("Invalid cookie");
+    // get x-mte-relay-client-id header from request
+    // if it exists, verify it, else set a new ID
+    const clientIdHeader = request.headers[options.clientIdHeader] as string;
+    let clientId: string = crypto.randomUUID();
+    if (clientIdHeader) {
+      const verified = verifySignedString(
+        clientIdHeader,
+        options.clientIdSecret
+      );
+      if (!verified) {
+        return reply
+          .code(400)
+          .send(`Invalid header: ${options.clientIdHeader}`);
       }
-      _id = unsigned.value;
+      clientId = verified;
     }
 
-    // if no existing cookie, create new one
-    const id = _id || crypto.randomUUID();
+    // set x-mte-relay-client-id header on every response
+    const signedClientId = signAString(clientId, options.clientIdSecret);
+    reply.header(options.clientIdHeader, signedClientId);
 
-    // create expiration date
-    const expiresDate = new Date();
-    expiresDate.setDate(expiresDate.getDate() + 31); // 31 days
+    // use x-mte-relay-client-id header to decorate request object with clientId
+    request.clientId = clientId;
 
-    // set cookie
-    reply.setCookie(options.cookieName, id, {
-      signed: true,
-      secure: true,
-      path: "/",
-      expires: expiresDate,
-    });
-
-    // decorate request object with "clientId" property
-    request.clientId = id;
+    // session ID is clientId OR clientId|sessionId
+    request.sessionId = request.clientId;
+    const sessionId = request.headers[options.sessionIdHeader] as string;
+    if (sessionId) {
+      request.sessionId += `|${sessionId}`;
+    }
 
     done();
   });

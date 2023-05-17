@@ -27,9 +27,9 @@ The configuration file is a YAML file that contains the following properties. Ex
 - `licenseKey`
   - **Required**
   - Your license key. See your project settings in the [Eclypses Developer's Portal](https://developers.eclypses.com).
-- `cookieSecret`
+- `clientIdSecret`
   - **Required**
-  - A secret that will be used to sign the MTE session cookie.
+  - A secret that will be used to sign the x-mte-client-id header.
 - `corsOrigins`
   - **Required**
   - A list of URLs that will be allowed to make cross-origin requests to the server.
@@ -44,10 +44,6 @@ The configuration file is a YAML file that contains the following properties. Ex
   - Default: `false`
 - `passThroughRoutes`
   - A list of routes that will be passed through to the upstream application without being MTE encoded/decoded.
-- `cookieName`
-  - The name of the cookie that will be used to store the MTE session.
-  - Default: `mte-relay-client-id`.
-  - It is recommended that you change this value to something unique and obfuscated. For example: `N8QZYo1z6SYd`.
 - `corsMethods`
   - A list of HTTP methods that will be allowed to make cross-origin requests to the server.
   - Default: `GET, POST, PUT, DELETE`.
@@ -61,7 +57,7 @@ The configuration file is a YAML file that contains the following properties. Ex
 upstream: https://api.my-company.com
 licenseCompany: My Company, LLC.
 licenseKey: 4vHSvWLTRvwx+JoThgT0p0kE
-cookieSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
+clientIdSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
 corsOrigins:
   - https://www.my-company.com
   - https://dashboard.my-company.com
@@ -74,7 +70,7 @@ reportAccessToken: x5l2212bAGAj81pAMm6bcB1tRipZjpDg
 upstream: https://api.my-company.com
 licenseCompany: My Company, LLC.
 licenseKey: 4vHSvWLTRvwx+JoThgT0p0kE
-cookieSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
+clientIdSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
 corsOrigins:
   - https://www.my-company.com
   - https://dashboard.my-company.com
@@ -84,7 +80,6 @@ debug: true
 passThroughRoutes:
   - /health
   - /version
-cookieName: N8QZYo1z6SYd
 corsMethods:
   - GET
   - POST

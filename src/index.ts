@@ -38,19 +38,16 @@ let server: FastifyInstance | null = null;
       origin: SETTINGS.CORS_ORIGINS,
       methods: SETTINGS.CORS_METHODS,
       credentials: true,
-      exposedHeaders: [
-        SETTINGS.MTE_SERVER_ID_HEADER,
-        SETTINGS.MTE_ENCODED_CONTENT_TYPE_HEADER_NAME,
-      ],
+      exposedHeaders: [SETTINGS.SERVER_ID_HEADER, SETTINGS.CLIENT_ID_HEADER],
     });
 
     // Register MTE ID manager module
     await server.register(mteIdManager, {
-      cookieSecret: SETTINGS.COOKIE_SECRET,
-      cookieName: SETTINGS.COOKIE_NAME,
-      mteClientIdHeader: SETTINGS.MTE_CLIENT_ID_HEADER,
-      mteServerIdHeader: SETTINGS.MTE_SERVER_ID_HEADER,
-      mteServerId: SETTINGS.MTE_RELAY_SERVER_ID,
+      clientIdSecret: SETTINGS.CLIENT_ID_SECRET,
+      clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
+      sessionIdHeader: SETTINGS.SESSION_ID_HEADER,
+      serverIdHeader: SETTINGS.SERVER_ID_HEADER,
+      mteServerId: SETTINGS.SERVER_ID,
     });
 
     // register anonymous api routes
@@ -61,7 +58,7 @@ let server: FastifyInstance | null = null;
 
     // register protected api routes
     await server.register(protectedApiRoutes, {
-      mteClientIdHeader: SETTINGS.MTE_CLIENT_ID_HEADER,
+      clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
     });
 
     // register pass-through routes
@@ -74,11 +71,12 @@ let server: FastifyInstance | null = null;
     await server.register(proxy, {
       upstream: SETTINGS.UPSTREAM,
       httpMethods: SETTINGS.CORS_METHODS,
-      contentTypeHeader: SETTINGS.MTE_ENCODED_CONTENT_TYPE_HEADER_NAME,
       repairCode: SETTINGS.REPAIR_REQUIRED_HTTP_CODE,
       tempDirPath: SETTINGS.TEMP_DIR_PATH,
-      mteClientIdHeader: SETTINGS.MTE_CLIENT_ID_HEADER,
+      clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
       maxFormDataSize: SETTINGS.MAX_FORM_DATA_SIZE,
+      sessionIdHeader: SETTINGS.SESSION_ID_HEADER,
+      encodedHeadersHeader: SETTINGS.ENCODED_HEADERS_HEADER,
     });
 
     await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });

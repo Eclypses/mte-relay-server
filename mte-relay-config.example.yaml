@@ -7,8 +7,8 @@ licenseCompany: Example, LLC.
 # The license key for your company. From https://developers.eclypses.com
 licenseKey: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 
-# A secret key used to sign cookies. 32+ character string is recommended.
-cookieSecret: abcdefghijklmnopqrstuvwxyz0123456789
+# A secret key used to sign client IDs. 32+ character string is recommended.
+clientIdSecret: abcdefghijklmnopqrstuvwxyz0123456789
 
 # The websites that are allowed to talk to this relay server
 corsOrigins:
@@ -27,9 +27,6 @@ reportAccessToken: zzzzzzzzzzzzzzzzzzzzzzzzzzzzz
 # passThroughRoutes:
 #   - /api/example/1
 #   - /api/example/2
-
-# [OPTIONAL] A custom name for your cookie. A non-human-readable string is recommended.
-# cookieName: abcdefgxyz
 
 # [OPTIONAL] Define allowed CORS methods. Below values match default values.
 # corsMethods:

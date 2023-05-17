@@ -6,7 +6,7 @@ import { z } from "zod";
 
 /**
  * Settings Module
- * Description: Read a yaml file and export immutable values for the program to use.
+ * Read a yaml file and export immutable values for the program to use.
  */
 
 // parse yaml file
@@ -22,7 +22,7 @@ const yamlSchema = z.object({
   upstream: z.string().url({ message: "upstream must be a valid URL." }),
   licenseCompany: z.string(),
   licenseKey: z.string(),
-  cookieSecret: z.string(),
+  clientIdSecret: z.string(),
   corsOrigins: z.array(
     z.string().url({ message: "corsOrigin must be a valid URL." })
   ),
@@ -30,7 +30,6 @@ const yamlSchema = z.object({
   port: z.number().optional(),
   debug: z.boolean().optional(),
   passThroughRoutes: z.array(z.string()).optional(),
-  cookieName: z.string().optional(),
   corsMethods: z.array(z.string()).optional(),
   redisConnectionString: z.string().optional(),
   outboundProxyBearerToken: z.string().optional(),
@@ -42,10 +41,11 @@ const validatedYaml = yamlSchema.parse(parsedYaml);
 
 // export values for program to use
 export default {
-  MTE_RELAY_SERVER_ID: crypto.randomUUID(),
-  MTE_SERVER_ID_HEADER: `x-mte-server-id`,
-  MTE_CLIENT_ID_HEADER: `x-mte-client-id`,
-  MTE_ENCODED_CONTENT_TYPE_HEADER_NAME: "x-mte-cth",
+  SERVER_ID: crypto.randomUUID(),
+  SERVER_ID_HEADER: `x-mte-relay-server-id`,
+  CLIENT_ID_HEADER: `x-mte-relay-client-id`,
+  SESSION_ID_HEADER: `x-mte-relay-session-id`,
+  ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
   PORT: validatedYaml.port || 8080,
   UPSTREAM: validatedYaml.upstream,
   LICENSE_COMPANY: validatedYaml.licenseCompany,
@@ -59,8 +59,7 @@ export default {
     }
     return [...required, ...defaults];
   })(),
-  COOKIE_NAME: validatedYaml.cookieName || "mte-relay-client-id",
-  COOKIE_SECRET: validatedYaml.cookieSecret,
+  CLIENT_ID_SECRET: validatedYaml.clientIdSecret,
   GENERATE_MTE_REPORT_ACCESS_TOKEN: validatedYaml.reportAccessToken,
   REDIS_URL: validatedYaml.redisConnectionString,
   DEBUG: validatedYaml.debug || false,
