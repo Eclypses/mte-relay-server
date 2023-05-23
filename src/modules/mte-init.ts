@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import fastifyPlugin from "fastify-plugin";
-import { instantiateMteWasm } from "mte-helpers";
+import { instantiateMteWasm } from "./mte";
 import { createClient, RedisClientType } from "redis";
 
 async function initMte(
@@ -25,23 +25,22 @@ async function initMte(
 
     // instantiate MTE
     await instantiateMteWasm({
-      licenseCompany: options.licenseCompany,
+      companyName: options.licenseCompany,
       licenseKey: options.licenseKey,
-      sequenceWindow: -63,
-      encoderType: "MKE",
-      decoderType: "MKE",
-      saveStateAs: "B64",
-      keepAlive: 1000,
       saveState: hasRedisUrl
         ? async function customSaveState(id, value) {
             await redisClient!.set(id, value);
           }
         : undefined,
       takeState: hasRedisUrl
-        ? async function customTakeState<T>(id: string) {
+        ? async function customTakeState(id) {
             const value = await redisClient!.get(id);
-            await redisClient!.del(id);
-            return value as unknown as T;
+            // If it is a decoder, do NOT remove it's state from cache.
+            // Two or more decoders can be created with the same state at the same time. This is NOT true for encoders.
+            if (!id.includes("decoder")) {
+              await redisClient!.del(id);
+            }
+            return value;
           }
         : undefined,
     });

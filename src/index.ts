@@ -38,7 +38,11 @@ let server: FastifyInstance | null = null;
       origin: SETTINGS.CORS_ORIGINS,
       methods: SETTINGS.CORS_METHODS,
       credentials: true,
-      exposedHeaders: [SETTINGS.SERVER_ID_HEADER, SETTINGS.CLIENT_ID_HEADER],
+      exposedHeaders: [
+        SETTINGS.SERVER_ID_HEADER,
+        SETTINGS.CLIENT_ID_HEADER,
+        SETTINGS.SESSION_ID_HEADER,
+      ],
     });
 
     // Register MTE ID manager module

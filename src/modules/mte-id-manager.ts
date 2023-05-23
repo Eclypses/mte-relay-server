@@ -63,12 +63,13 @@ async function mteIdManager(
     // use x-mte-relay-client-id header to decorate request object with clientId
     request.clientId = clientId;
 
-    // session ID is clientId OR clientId|sessionId
+    // session ID is clientId OR clientId.sessionId
     request.sessionId = request.clientId;
     const sessionId = request.headers[options.sessionIdHeader] as string;
     if (sessionId) {
-      request.sessionId += `|${sessionId}`;
+      request.sessionId += `.${sessionId}`;
     }
+    reply.header(options.sessionIdHeader, sessionId);
 
     done();
   });

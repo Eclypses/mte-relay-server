@@ -1,7 +1,7 @@
 import { FastifyRequest, FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
 import { getEcdh } from "../utils/ecdh";
-import { createMteEncoder, createMteDecoder } from "mte-helpers";
+import { instantiateEncoder, instantiateDecoder } from "./mte";
 import { getNonce } from "../utils/nonce";
 
 /**
@@ -47,8 +47,8 @@ export function protectedApiRoutes(
         const encoderEntropy = encoderEcdh.computeSharedSecret(
           validationResult.data.decoderPublicKey
         );
-        createMteEncoder({
-          id: `encoder_${request.sessionId}`,
+        instantiateEncoder({
+          id: `encoder.${request.sessionId}`,
           entropy: encoderEntropy,
           nonce: encoderNonce,
           personalization: validationResult.data.decoderPersonalizationStr,
@@ -60,8 +60,8 @@ export function protectedApiRoutes(
         const decoderEntropy = decoderEcdh.computeSharedSecret(
           validationResult.data.encoderPublicKey
         );
-        createMteDecoder({
-          id: `decoder_${request.sessionId}`,
+        instantiateDecoder({
+          id: `decoder.${request.sessionId}`,
           entropy: decoderEntropy,
           nonce: decoderNonce,
           personalization: validationResult.data.encoderPersonalizationStr,

@@ -4,7 +4,7 @@ import {
   FastifyReply,
   HTTPMethods,
 } from "fastify";
-import { mteDecode, mteEncode } from "mte-helpers";
+import { mkeDecode, mkeEncode } from "./mte";
 import multipart from "@fastify/multipart";
 import FormData from "form-data";
 import axios, { AxiosResponse } from "axios";
@@ -12,6 +12,7 @@ import fs from "fs";
 import path from "path";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
+import { MteError } from "./mte/errors";
 
 function proxyHandler(
   fastify: FastifyInstance,
@@ -130,19 +131,18 @@ function proxyHandler(
             const iMax = fields.length;
             for (; i < iMax; ++i) {
               const _field = fields[i];
-              const decodedFieldName = await mteDecode(_field.fieldname, {
-                id: `decoder_${request.sessionId}`,
-                sequenceWindow: -63,
-                timestampWindow: 1000,
+              const decodedFieldName = await mkeDecode(_field.fieldname, {
+                stateId: `decoder.${request.sessionId}`,
                 output: "str",
               });
-              const decodedFieldValue = await mteDecode(_field.value, {
-                id: `decoder_${request.sessionId}`,
-                sequenceWindow: -63,
-                timestampWindow: 1000,
+              const decodedFieldValue = await mkeDecode(_field.value, {
+                stateId: `decoder.${request.sessionId}`,
                 output: "str",
               });
-              decodedFormData.append(decodedFieldName, decodedFieldValue);
+              decodedFormData.append(
+                decodedFieldName as string,
+                decodedFieldValue
+              );
             }
 
             // decode file fields second
@@ -150,35 +150,29 @@ function proxyHandler(
             const iiMax = files.length;
             for (; ii < iiMax; ii++) {
               const _file = files[ii];
-              const decodedFieldName = await mteDecode(_file.fieldname, {
-                id: `decoder_${request.sessionId}`,
-                sequenceWindow: -63,
-                timestampWindow: 1000,
+              const decodedFieldName = await mkeDecode(_file.fieldname, {
+                stateId: `decoder.${request.sessionId}`,
                 output: "str",
               });
               const fieldName = decodeURIComponent(_file.filename);
-              const decodedFileName = await mteDecode(fieldName, {
-                id: `decoder_${request.sessionId}`,
-                sequenceWindow: -63,
-                timestampWindow: 1000,
+              const decodedFileName = await mkeDecode(fieldName, {
+                stateId: `decoder.${request.sessionId}`,
                 output: "str",
               });
               const buffer = await _file.toBuffer();
               const u8 = new Uint8Array(buffer);
-              const decodedFile = await mteDecode(u8, {
-                id: `decoder_${request.sessionId}`,
-                sequenceWindow: -63,
-                timestampWindow: 1000,
+              const decodedFile = await mkeDecode(u8, {
+                stateId: `decoder.${request.sessionId}`,
                 output: "Uint8Array",
               });
               // write decoded file to tmp dir
               const id = Math.floor(Math.random() * 1e15);
               const tmpPath = path.join(options.tempDirPath, `${id}.tmp`);
               tmpFilesToDelete.push(tmpPath);
-              await fs.promises.writeFile(tmpPath, decodedFile);
+              await fs.promises.writeFile(tmpPath, decodedFile as Uint8Array);
               const stream = fs.createReadStream(tmpPath);
-              decodedFormData.append(decodedFieldName, stream, {
-                filename: decodedFileName,
+              decodedFormData.append(decodedFieldName as string, stream, {
+                filename: decodedFileName as string,
               });
             }
           } catch (error) {
@@ -208,11 +202,11 @@ function proxyHandler(
               .status(400)
               .send(`Missing ${options.encodedHeadersHeader} header.`);
           }
-          const decodedHeaders = await mteDecode(encodedHeaders, {
-            id: `decoder_${request.sessionId}`,
+          const decodedHeaders = await mkeDecode(encodedHeaders, {
+            stateId: `decoder.${request.sessionId}`,
             output: "str",
           });
-          const headers = JSON.parse(decodedHeaders);
+          const headers = JSON.parse(decodedHeaders as string);
           Object.entries(headers).forEach((header) => {
             proxyHeaders[header[0]] = header[1] as string;
           });
@@ -223,12 +217,8 @@ function proxyHandler(
           let decodedPayload: any = request.body;
           if (request.body) {
             try {
-              decodedPayload = await mteDecode(request.body as any, {
-                id: `decoder_${request.sessionId}`,
-                timestampWindow: 1000,
-                sequenceWindow: -63,
-                keepAlive: 1000,
-                // @ts-ignore
+              decodedPayload = await mkeDecode(request.body as any, {
+                stateId: `decoder.${request.sessionId}`,
                 output: contentTypeIsText(contentType) ? "str" : "Uint8Array",
               });
             } catch (error) {
@@ -325,11 +315,11 @@ function proxyHandler(
         }
 
         // encode body
-        const encodedBody = await mteEncode(_body, {
-          id: `encoder_${request.sessionId}`,
+        const encodedBody = await mkeEncode(_body, {
+          stateId: `encoder.${request.sessionId}`,
           output: "Uint8Array",
         });
-        const _buffer = Buffer.from(encodedBody);
+        const _buffer = Buffer.from(encodedBody as Uint8Array);
         reply.send(_buffer);
 
         // delete tmp files if they exist
@@ -341,6 +331,12 @@ function proxyHandler(
           });
         }
       } catch (error) {
+        if (error instanceof MteError) {
+          return reply.status(error.status).send({
+            error: error.message,
+            info: error.info,
+          });
+        }
         console.log(error);
         let msg = "An unknown error occurred";
         if (error instanceof Error) {
