@@ -21,6 +21,7 @@ async function initMte(
         url: options.redisUrl,
       });
       await redisClient.connect();
+      console.log(`Redis connected successfully.`);
     }
 
     // instantiate MTE

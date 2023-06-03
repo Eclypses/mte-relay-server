@@ -192,6 +192,7 @@ function proxyHandler(
         /**
          * Handle NON-multipart/form-data requests
          */
+        let mkeDecodedHeaders: Record<string, string> = {};
         if (Boolean(request.body) && !isMultipart) {
           // decode headers
           const encodedHeaders = request.headers[
@@ -207,8 +208,9 @@ function proxyHandler(
             output: "str",
           });
           const headers = JSON.parse(decodedHeaders as string);
-          Object.entries(headers).forEach((header) => {
-            proxyHeaders[header[0]] = header[1] as string;
+          Object.entries(headers).forEach(([key, value]) => {
+            mkeDecodedHeaders[key] = value as string;
+            proxyHeaders[key] = value as string;
           });
 
           // decode incoming payload
@@ -274,6 +276,7 @@ function proxyHandler(
 
         // @ts-ignore
         const proxyResponseHeaders = cloneHeaders(proxyResponse.headers);
+
         // merge these headers with upstream server headers, if present
         proxyResponseHeaders["access-control-allow-headers"] = (() => {
           let value: string[] = [];
@@ -303,6 +306,25 @@ function proxyHandler(
         })();
         delete proxyResponseHeaders["content-length"];
         delete proxyResponseHeaders["transfer-encoding"];
+        delete proxyResponseHeaders["access-control-allow-origin"];
+        proxyResponseHeaders[options.encodedHeadersHeader];
+
+        // encode headers
+        const headersToEncode: Record<string, string> = {};
+        const contentTypeHeader = proxyResponse.headers["content-type"];
+        if (contentTypeHeader) {
+          headersToEncode["content-type"] = contentTypeHeader;
+        }
+        Object.entries(mkeDecodedHeaders).forEach(([key, value]) => {
+          headersToEncode[key] = value;
+        });
+        const encodedHeadersJson = JSON.stringify(headersToEncode);
+        const encodedResponseHeaders = await mkeEncode(encodedHeadersJson, {
+          stateId: `encoder.${request.sessionId}`,
+          output: "B64",
+        });
+        proxyResponseHeaders[options.encodedHeadersHeader] =
+          encodedResponseHeaders as string;
 
         // copy proxyResponse headers to reply
         reply.headers(proxyResponseHeaders);

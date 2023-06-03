@@ -42,6 +42,7 @@ let server: FastifyInstance | null = null;
         SETTINGS.SERVER_ID_HEADER,
         SETTINGS.CLIENT_ID_HEADER,
         SETTINGS.SESSION_ID_HEADER,
+        SETTINGS.ENCODED_HEADERS_HEADER,
       ],
     });
 
