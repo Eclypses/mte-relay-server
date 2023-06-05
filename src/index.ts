@@ -5,7 +5,7 @@ import { anonymousApiRoutes, protectedApiRoutes } from "./modules/api";
 import proxy from "./modules/proxy";
 import sqlite from "./modules/sqlite";
 import mteInit from "./modules/mte-init";
-import SETTINGS from "./modules/settings";
+import settings from "./modules/settings";
 import passThrough from "./modules/pass-through";
 import mteIdManager from "./modules/mte-id-manager";
 import { startupChecks } from "./modules/startup-checks";
@@ -15,6 +15,8 @@ let server: FastifyInstance | null = null;
 // start server
 (async () => {
   try {
+    const SETTINGS = await settings();
+
     // startup checks
     await startupChecks();
 

@@ -90,6 +90,23 @@ function proxyHandler(
         // array of paths of tmp files to delete after request
         let tmpFilesToDelete: string[] = [];
 
+        // decoded headers
+        let mkeDecodedHeaders: Record<string, string> = {};
+        const encodedHeaders = request.headers[
+          options.encodedHeadersHeader
+        ] as string;
+        if (encodedHeaders) {
+          const decodedHeaders = await mkeDecode(encodedHeaders, {
+            stateId: `decoder.${request.sessionId}`,
+            output: "str",
+          });
+          const headers = JSON.parse(decodedHeaders as string);
+          Object.entries(headers).forEach(([key, value]) => {
+            mkeDecodedHeaders[key] = value as string;
+            proxyHeaders[key] = value as string;
+          });
+        }
+
         /**
          * Handle multipart/form-data requests
          */
@@ -192,27 +209,7 @@ function proxyHandler(
         /**
          * Handle NON-multipart/form-data requests
          */
-        let mkeDecodedHeaders: Record<string, string> = {};
         if (Boolean(request.body) && !isMultipart) {
-          // decode headers
-          const encodedHeaders = request.headers[
-            options.encodedHeadersHeader
-          ] as string;
-          if (!encodedHeaders) {
-            return reply
-              .status(400)
-              .send(`Missing ${options.encodedHeadersHeader} header.`);
-          }
-          const decodedHeaders = await mkeDecode(encodedHeaders, {
-            stateId: `decoder.${request.sessionId}`,
-            output: "str",
-          });
-          const headers = JSON.parse(decodedHeaders as string);
-          Object.entries(headers).forEach(([key, value]) => {
-            mkeDecodedHeaders[key] = value as string;
-            proxyHeaders[key] = value as string;
-          });
-
           // decode incoming payload
           const contentType =
             request.headers["content-type"] || "application/json";

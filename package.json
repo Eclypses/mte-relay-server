@@ -4,10 +4,12 @@
   "description": "",
   "scripts": {
     "dev": "nodemon src/index.ts",
+    "dev:custom": "nodemon src/index.ts --settings C:\\Users\\Trevor\\Eclypses\\Eclypses\\mte-relay-development\\mte-relay-server\\mte-relay-config.js",
     "debug": "nodemon --exec \"node --inspect=0.0.0.0:9229 --require ts-node/register src/index.ts\"",
     "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js --packages=external --sourcemap=external --minify",
     "build:docker": "npm run build && docker build -t mte-relay-server .",
-    "publish:dry-run": "npm publish --dry-run"
+    "publish:dry-run": "npm publish --dry-run",
+    "publish:beta": "npm run build && npm publish --tag beta"
   },
   "files": [
     "dist"

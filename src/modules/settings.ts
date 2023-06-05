@@ -4,20 +4,24 @@ import path from "path";
 import crypto from "crypto";
 import { z } from "zod";
 
-/**
- * Settings Module
- * Read a yaml file and export immutable values for the program to use.
- */
-
-// parse yaml file
-const yamlPath = path.join(process.cwd(), "mte-relay-config.yaml");
-const file = fs.readFileSync(yamlPath, { encoding: "utf-8" });
-const parsedYaml = yaml.parse(file);
-
 // where to store sqlite3 db, and tmp/
 const persistentDir = path.join(process.cwd(), "data");
 
-// validate yaml file
+// default settings
+const DEFAULT_OPTIONS = {
+  SERVER_ID: crypto.randomUUID(),
+  SERVER_ID_HEADER: `x-mte-relay-server-id`,
+  CLIENT_ID_HEADER: `x-mte-relay-client-id`,
+  SESSION_ID_HEADER: `x-mte-relay-session-id`,
+  ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
+  PORT: 8080,
+  DEBUG: false,
+  PERSISTENT_DIR: persistentDir,
+  TEMP_DIR_PATH: path.join(persistentDir, "tmp"),
+  MAX_FORM_DATA_SIZE: 1024 * 1024 * 20, // 20mb
+};
+
+// schema for validating settings passed into server
 const yamlSchema = z.object({
   upstream: z.string().url({ message: "upstream must be a valid URL." }),
   licenseCompany: z.string(),
@@ -36,37 +40,64 @@ const yamlSchema = z.object({
   maxFormDataSize: z.number().optional(),
 });
 
-// validate yaml file has everything needed
-const validatedYaml = yamlSchema.parse(parsedYaml);
+// default function for generating settings
+export default async function () {
+  let _settings = null;
 
-// export values for program to use
-export default {
-  SERVER_ID: crypto.randomUUID(),
-  SERVER_ID_HEADER: `x-mte-relay-server-id`,
-  CLIENT_ID_HEADER: `x-mte-relay-client-id`,
-  SESSION_ID_HEADER: `x-mte-relay-session-id`,
-  ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
-  PORT: validatedYaml.port || 8080,
-  UPSTREAM: validatedYaml.upstream,
-  LICENSE_COMPANY: validatedYaml.licenseCompany,
-  LICENSE_KEY: validatedYaml.licenseKey,
-  CORS_ORIGINS: validatedYaml.corsOrigins,
-  CORS_METHODS: (() => {
+  const flagIndex = process.argv.indexOf("--settings");
+  if (flagIndex > -1) {
+    // Get the file path after the flag
+    const filePath = process.argv[flagIndex + 1];
+    try {
+      // Dynamically import the module
+      const getSettings = await import(filePath);
+      _settings = await getSettings.default();
+    } catch (error) {
+      console.log(`Failed to load settings file: ${filePath}`);
+      console.log(error);
+      process.exit(1);
+    }
+  } else {
+    // by default, parse a yaml file
+    const yamlPath = path.join(process.cwd(), "mte-relay-config.yaml");
+    const file = fs.readFileSync(yamlPath, { encoding: "utf-8" });
+    _settings = yaml.parse(file);
+  }
+
+  // validate user provided settings
+  const userSettings = yamlSchema.parse(_settings);
+
+  // map user settings to app settings object
+  const _userSettings = {
+    PORT: userSettings.port || DEFAULT_OPTIONS.PORT,
+    UPSTREAM: userSettings.upstream,
+    LICENSE_COMPANY: userSettings.licenseCompany,
+    LICENSE_KEY: userSettings.licenseKey,
+    CORS_ORIGINS: userSettings.corsOrigins,
+    CLIENT_ID_SECRET: userSettings.clientIdSecret,
+    GENERATE_MTE_REPORT_ACCESS_TOKEN: userSettings.reportAccessToken,
+    REDIS_URL: userSettings.redisConnectionString,
+    DEBUG: userSettings.debug || DEFAULT_OPTIONS.DEBUG,
+    REPAIR_REQUIRED_HTTP_CODE: 559,
+    OUTBOUND_PROXY_BEARER_TOKEN: userSettings.outboundProxyBearerToken,
+    PASS_THROUGH_ROUTES: userSettings.passThroughRoutes || [],
+    MAX_FORM_DATA_SIZE:
+      userSettings.maxFormDataSize || DEFAULT_OPTIONS.MAX_FORM_DATA_SIZE,
+  };
+
+  // SET CORs methods
+  const _corsMethods = (() => {
     const required = [`OPTIONS`, `HEAD`];
     const defaults = [`GET`, `POST`, `PUT`, `DELETE`];
-    if (validatedYaml.corsMethods) {
-      return [...required, ...validatedYaml.corsMethods];
+    if (userSettings.corsMethods) {
+      return [...required, ...userSettings.corsMethods];
     }
     return [...required, ...defaults];
-  })(),
-  CLIENT_ID_SECRET: validatedYaml.clientIdSecret,
-  GENERATE_MTE_REPORT_ACCESS_TOKEN: validatedYaml.reportAccessToken,
-  REDIS_URL: validatedYaml.redisConnectionString,
-  DEBUG: validatedYaml.debug || false,
-  REPAIR_REQUIRED_HTTP_CODE: 559,
-  TEMP_DIR_PATH: path.join(persistentDir, "tmp"),
-  OUTBOUND_PROXY_BEARER_TOKEN: validatedYaml.outboundProxyBearerToken,
-  PASS_THROUGH_ROUTES: validatedYaml.passThroughRoutes || [],
-  PERSISTENT_DIR: persistentDir,
-  MAX_FORM_DATA_SIZE: validatedYaml.maxFormDataSize || 1024 * 1024 * 20, // 20mb
-} as const;
+  })();
+
+  return {
+    ...DEFAULT_OPTIONS,
+    ..._userSettings,
+    CORS_METHODS: _corsMethods,
+  } as const;
+}
