@@ -1,7 +1,12 @@
 import { FastifyInstance } from "fastify";
 import fastifyPlugin from "fastify-plugin";
 import { instantiateMteWasm } from "./mte";
-import { createClient, RedisClientType } from "redis";
+import { z } from "zod";
+
+const cacheSchema = z.object({
+  takeState: z.function(),
+  saveState: z.function(),
+});
 
 async function initMte(
   _fastify: FastifyInstance,
@@ -13,37 +18,34 @@ async function initMte(
   done: any
 ) {
   try {
-    // if Redis is available, connect to it
-    const hasRedisUrl = Boolean(options.redisUrl);
-    let redisClient: null | RedisClientType = null;
-    if (hasRedisUrl) {
-      redisClient = createClient({
-        url: options.redisUrl,
-      });
-      await redisClient.connect();
-      console.log(`Redis connected successfully.`);
+    let takeState: any = undefined;
+    let saveState: any = undefined;
+
+    // dynamically inject MTE State caching solution from consumer
+    const flagIndex = process.argv.indexOf("--cache-adapter");
+    if (flagIndex > -1) {
+      // Get the file path after the flag
+      const filePath = process.argv[flagIndex + 1];
+      try {
+        // Dynamically import the module
+        const cacheModule = await import(filePath);
+        const cache = await cacheModule.default();
+        const validatedCache = cacheSchema.parse(cache);
+        takeState = validatedCache.takeState;
+        saveState = validatedCache.saveState;
+      } catch (error) {
+        console.log(`Failed to load settings file: ${filePath}`);
+        console.log(error);
+        process.exit(1);
+      }
     }
 
     // instantiate MTE
     await instantiateMteWasm({
       companyName: options.licenseCompany,
       licenseKey: options.licenseKey,
-      saveState: hasRedisUrl
-        ? async function customSaveState(id, value) {
-            await redisClient!.set(id, value);
-          }
-        : undefined,
-      takeState: hasRedisUrl
-        ? async function customTakeState(id) {
-            const value = await redisClient!.get(id);
-            // If it is a decoder, do NOT remove it's state from cache.
-            // Two or more decoders can be created with the same state at the same time. This is NOT true for encoders.
-            if (!id.includes("decoder")) {
-              await redisClient!.del(id);
-            }
-            return value;
-          }
-        : undefined,
+      saveState: saveState,
+      takeState: takeState,
     });
     console.log(`MTE instantiated successfully.`);
     done();

@@ -35,16 +35,17 @@ const yamlSchema = z.object({
   debug: z.boolean().optional(),
   passThroughRoutes: z.array(z.string()).optional(),
   corsMethods: z.array(z.string()).optional(),
-  redisConnectionString: z.string().optional(),
   outboundProxyBearerToken: z.string().optional(),
   maxFormDataSize: z.number().optional(),
+  headers: z.object({}).passthrough().optional(),
+  mteRoutes: z.array(z.string()).optional(),
 });
 
 // default function for generating settings
 export default async function () {
   let _settings = null;
 
-  const flagIndex = process.argv.indexOf("--settings");
+  const flagIndex = process.argv.indexOf("--settings-adapter");
   if (flagIndex > -1) {
     // Get the file path after the flag
     const filePath = process.argv[flagIndex + 1];
@@ -76,13 +77,13 @@ export default async function () {
     CORS_ORIGINS: userSettings.corsOrigins,
     CLIENT_ID_SECRET: userSettings.clientIdSecret,
     GENERATE_MTE_REPORT_ACCESS_TOKEN: userSettings.reportAccessToken,
-    REDIS_URL: userSettings.redisConnectionString,
     DEBUG: userSettings.debug || DEFAULT_OPTIONS.DEBUG,
-    REPAIR_REQUIRED_HTTP_CODE: 559,
     OUTBOUND_PROXY_BEARER_TOKEN: userSettings.outboundProxyBearerToken,
     PASS_THROUGH_ROUTES: userSettings.passThroughRoutes || [],
     MAX_FORM_DATA_SIZE:
       userSettings.maxFormDataSize || DEFAULT_OPTIONS.MAX_FORM_DATA_SIZE,
+    HEADERS: userSettings.headers,
+    MTE_ROUTES: userSettings.mteRoutes,
   };
 
   // SET CORs methods

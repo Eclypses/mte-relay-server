@@ -4,11 +4,20 @@ The MTE Relay Server is a NodeJS server that proxies HTTP requests that have bee
 
 ### Installation
 
-MTE Relay Server consists of several configuration files, and to make the setup process easier, we released a CLI tool that can scaffold the project for you. Run the below command where you would like to create the MTE Relay Server directory.
+Please use the CLI command below to scaffold a new MTE Relay Server project.
 
-`npx create-mte-relay-server@latest`
+```sh
+cd ~/Desktop
+npx create-mte-relay-server@latest
+```
 
-Next, configure the `mte-relay-config.yaml` file to match your application's requirements. Finally, choose a Docker implementation or a local implementation.
+### Quick Start Guide
+
+- Configure `mte-relay-config.yaml` file
+- Update the `.npmrc` file with your auth token. This can be found in the Eclypses Developer Portal.
+- Install your MTE library package. This can be found in the Eclypses Developer Portal.
+  - Example: `npm i mte@npm:@eclypses/my-mte-library`
+- Run locally with `npm run start`
 
 ### Config File
 
@@ -44,12 +53,14 @@ The configuration file is a YAML file that contains the following properties. Ex
   - Default: `false`
 - `passThroughRoutes`
   - A list of routes that will be passed through to the upstream application without being MTE encoded/decoded.
+- `mteRoutes`
+  - A list of routes that will be MTE encoded/decoded. If this optional property is included, only the routes listed will be MTE encoded/decoded, and any routes not listed here or in `passThroughRoutes` will 404. If this optional property is not included, all routes not listed in `passThroughRoutes` will be MTE encoded/decoded.
 - `corsMethods`
   - A list of HTTP methods that will be allowed to make cross-origin requests to the server.
   - Default: `GET, POST, PUT, DELETE`.
   - Note: `OPTIONS` and `HEAD` are always allowed.
-- `redisConnectionString`
-  - The connection string for a Redis server that may be used to store the MTE session. If left undefined, the MTE session will be stored in memory.
+- `headers`
+  - An object of headers that will be added to all request/responses.
 
 #### Minimal Configuration Example
 
@@ -80,12 +91,24 @@ debug: true
 passThroughRoutes:
   - /health
   - /version
+mteRoutes:
+  - /api/v1/*
+  - /api/v2/*
 corsMethods:
   - GET
   - POST
   - DELETE
-redisConnectionString: redis://localhost:6379
+headers:
+  x-service-name: mte-relay
 ```
+
+### Local Implementation
+
+To run MTE Relay Server locally on your hardware, follow these instructions:
+
+- Install your MTE library package. This can be found in the Eclypses Developer Portal.
+  - Example: `npm i mte@npm:@eclypses/my-mte-library`
+- Start the proxy server with `npm run start`
 
 ### Docker Implementation
 
@@ -99,18 +122,55 @@ To run MTE Relay Server in a Docker container, follow these instructions:
 - Build the Docker image with `docker build . -t mte-relay-server`
 - Run the Docker container with the command `docker compose up`
 
-### Local Implementation
+### Settings Adapters
 
-To run MTE Relay Server locally on your hardware, follow these instructions:
+If you don't want to (or can't) use a yaml file to load settings, you can write your own settings adapter. The settings adapter must export a function that returns a promise that resolves to a settings object with all the required settings (see above).
 
-- Install your MTE library package. This can be found in the Eclypses Developer Portal.
-  - Example: `npm i mte@npm:@eclypses/my-mte-library`
-- Start the proxy server with `npm run start`
+Example
+
+```javascript
+const lib = require("lib");
+
+module.exports = async function () {
+  /* Load settings from somewhere... */
+  const settings = lib.loadMteRelaySettings();
+  return settings;
+};
+```
+
+Then, you need to use a CLI flag to point to that settings file when starting the server.
+
+Example:
+`npm run start -- --settings-adapter /path_to/settings-adapter.js`
+
+See more examples in the [examples/settings-adapters](examples/settings-adapters) directory. TODO: AWS, GCP, Azure, etc.
+
+### MTE State Cache Adapters
+
+By default, MTE State is saved in-memory. This means that if the server is restarted, all MTE State will be lost. To persist MTE State across server restarts, you can use an external cache by writing your own cache adapter.
+
+A cache adapter is a file that exports a function that returns a Promise that resolves to an object with the following methods:
+
+```javascript
+module.exports = async function () {
+  return {
+    takeState: async function (key) {
+      // Return the MTE State for the given key
+    },
+    getState: async function (key, state) {
+      // Save the MTE State for the given key
+    },
+  };
+};
+```
+
+See examples in the [examples/cache-adapters](examples/cache-adapters) directory. TODO: /examples/cache-adapters/ Redis Memcached / Vercel KV.
+
+Then, you need to use a CLI flag to point to that cache adapter file when starting the server.
+
+`npm run start -- --cache-adapter /path_to/cache-adapter.js`
 
 ### Local Development
 
-- Create a `.npmrc` file in the root of the project with the following contents. Include credentials from developer portal.
-- Install your MTE library package. This can be found in the Eclypses Developer Portal.
-  - Example: `npm i mte@npm:@eclypses/my-mte-library --no-save`
-- Create a `mte-relay-config.yaml` file in the root of the project. See the [Config File](#config-file) section for more information.
+- Follow the quick start guide to configure requires files and install dependencies.
 - Run `npm run dev` to start the server in development mode.

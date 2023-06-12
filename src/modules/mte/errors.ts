@@ -12,7 +12,7 @@ const statusCodes: Set<number> = new Set(Object.values(MTE_ERRORS));
 
 type ErrorMessages = keyof typeof MTE_ERRORS;
 
-export class MteError extends Error {
+export class MteRelayError extends Error {
   public status: number;
   public info?: any;
 
@@ -24,5 +24,14 @@ export class MteError extends Error {
 
   static isMteErrorStatus(status: number) {
     return statusCodes.has(status);
+  }
+  static getStatusErrorMessages(status: number): ErrorMessages | undefined {
+    const entries = Object.entries(MTE_ERRORS);
+    for (const [message, code] of entries) {
+      if (code === status) {
+        return message as ErrorMessages;
+      }
+    }
+    return undefined;
   }
 }

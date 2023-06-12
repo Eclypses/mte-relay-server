@@ -8,7 +8,7 @@ import {
   MteStrStatus,
 } from "mte";
 import { setItem, takeItem } from "./memory-cache";
-import { MteError } from "./errors";
+import { MteRelayError } from "./errors";
 
 let mteWasm: MteWasm;
 
@@ -127,7 +127,7 @@ export async function mkeEncode(
 ) {
   const currentState = await cache.takeState(options.stateId);
   if (!currentState) {
-    throw new MteError("State not found.", {
+    throw new MteRelayError("State not found.", {
       stateId: options.stateId,
     });
   }
@@ -157,7 +157,7 @@ export async function mkeEncode(
     validateStatusIsSuccess(encodeResult.status, encoder);
     returnEncoderToPool(encoder);
   } catch (error) {
-    throw new MteError("Failed to encode.", {
+    throw new MteRelayError("Failed to encode.", {
       stateId: options.stateId,
       error: (error as Error).message,
     });
@@ -170,7 +170,7 @@ export async function mkeDecode(
 ) {
   const currentState = await cache.takeState(options.stateId);
   if (!currentState) {
-    throw new MteError("State not found.", {
+    throw new MteRelayError("State not found.", {
       stateId: options.stateId,
     });
   }
@@ -194,7 +194,7 @@ export async function mkeDecode(
     }
     validateStatusIsSuccess(decodeResult.status, decoder);
   } catch (error) {
-    throw new MteError("Failed to decode.", {
+    throw new MteRelayError("Failed to decode.", {
       stateId: options.stateId,
       error: (error as Error).message,
     });
@@ -210,7 +210,7 @@ function validateStatusIsSuccess(status: MteStatus, mteBase: MteBase) {
     if (isError) {
       const statusName = mteBase.getStatusName(status);
       const description = mteBase.getStatusDescription(status);
-      throw new MteError("MTE Status was not successful.", {
+      throw new MteRelayError("MTE Status was not successful.", {
         statusName,
         description,
       });
@@ -225,7 +225,7 @@ function restoreMteState(encdec: EncDec, state: string): void {
 function getMteState(encoder: EncDec) {
   const state = encoder.saveStateB64();
   if (!state) {
-    throw new MteError("Failed to get state from encoder or decoder.");
+    throw new MteRelayError("Failed to get state from encoder or decoder.");
   }
   return state;
 }
@@ -237,6 +237,6 @@ function drbgReseedCheck(encoder: EncDec) {
   const counter = Number(String(encoder.getReseedCounter()).substring(0, 15));
   const reseedIsRequired = counter / threshhold > 0.9;
   if (reseedIsRequired) {
-    throw new MteError("DRBG reseed is required.");
+    throw new MteRelayError("DRBG reseed is required.");
   }
 }
