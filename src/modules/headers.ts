@@ -9,11 +9,12 @@ async function customHeader(
   done: any
 ) {
   if (options.headers) {
-    _fastify.addHook("onRequest", (request, reply, done) => {
+    _fastify.addHook("onRequest", (request, reply, _done) => {
       for (const [key, value] of Object.entries(options.headers!)) {
         reply.header(key, value);
         request.headers[key] = value;
       }
+      _done();
     });
   }
   done();

@@ -1,7 +1,7 @@
 FROM node:18-alpine
 
 # create this directory inside our custom image
-WORKDIR /mte-relay-server
+WORKDIR /app
 
 # Clone mte-relay-server 
 COPY ./dist/index.js ./index.js

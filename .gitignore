@@ -9,6 +9,4 @@ dist/
 docker-compose.yml
 package-lock.json
 data/
-json-cache.js
-json-cache.json
-redis-cache.js
+settings.js
