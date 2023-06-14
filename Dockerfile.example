@@ -6,12 +6,13 @@ WORKDIR /mte-relay-server
 # Clone mte-relay-server 
 COPY ./dist/index.js ./index.js
 COPY ./package.json ./package.json
+COPY ./mte-relay-config.yaml .
 
 # Copy MTE
 COPY .npmrc .
 
 # Install MTE
-RUN npm i mte@npm:____MTE_PACKAGE_HERE_____
+RUN npm i mte@npm:____MTE_PACKAGE_HERE_____ --omit=dev
 
 # Expose port
 EXPOSE 8080

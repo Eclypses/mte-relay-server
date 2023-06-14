@@ -126,24 +126,19 @@ To run MTE Relay Server in a Docker container, follow these instructions:
 
 If you don't want to (or can't) use a yaml file to load settings, you can write your own settings adapter. The settings adapter must export a function that returns a promise that resolves to a settings object with all the required settings (see above).
 
-Example
-
 ```javascript
-const lib = require("lib");
-
 module.exports = async function () {
   /* Load settings from somewhere... */
-  const settings = lib.loadMteRelaySettings();
+  const settings = loadSettings();
   return settings;
 };
 ```
 
 Then, you need to use a CLI flag to point to that settings file when starting the server.
 
-Example:
 `npm run start -- --settings-adapter /path_to/settings-adapter.js`
 
-See more examples in the [examples/settings-adapters](examples/settings-adapters) directory. TODO: AWS, GCP, Azure, etc.
+See more examples in the [examples/settings-adapters](examples/settings-adapters) directory.
 
 ### MTE State Cache Adapters
 
@@ -164,7 +159,7 @@ module.exports = async function () {
 };
 ```
 
-See examples in the [examples/cache-adapters](examples/cache-adapters) directory. TODO: /examples/cache-adapters/ Redis Memcached / Vercel KV.
+See examples in the [examples/cache-adapters](examples/cache-adapters) directory.
 
 Then, you need to use a CLI flag to point to that cache adapter file when starting the server.
 

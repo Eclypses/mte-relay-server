@@ -19,6 +19,11 @@ corsOrigins:
 # An access token required to generate an MTE Usage report
 # via this path: /api/mte-report/:accessToken
 reportAccessToken: zzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+# [OPTIONAL] Enable debug logging
+# debug: true
+# [OPTIONAL] Add custom headers to every request/response
+# headers:
+#   test: test-header
 
 # [OPTIONAL] Listen on this port. Must match EXPOSE port in Dockerfile.
 # port: 8080
@@ -28,6 +33,12 @@ reportAccessToken: zzzzzzzzzzzzzzzzzzzzzzzzzzzzz
 #   - /api/example/1
 #   - /api/example/2
 
+# [OPTIONAL] MTE routes to expect. If this is included, only these routes will be allowed.
+# mteRoutes:
+#   - /api/login
+#   - /api/auth-check
+#   - /api/logout
+
 # [OPTIONAL] Define allowed CORS methods. Below values match default values.
 # corsMethods:
 #   - GET
@@ -35,5 +46,3 @@ reportAccessToken: zzzzzzzzzzzzzzzzzzzzzzzzzzzzz
 #   - PUT
 #   - DELETE
 
-# [OPTIONAL] If provided, the proxy server to connect to a Redis database.
-# redisConnectionString: redis://redis.example.com:6379
