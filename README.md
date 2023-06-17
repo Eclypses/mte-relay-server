@@ -152,7 +152,7 @@ module.exports = async function () {
     takeState: async function (key) {
       // Return the MTE State for the given key
     },
-    getState: async function (key, state) {
+    saveState: async function (key, state) {
       // Save the MTE State for the given key
     },
   };
