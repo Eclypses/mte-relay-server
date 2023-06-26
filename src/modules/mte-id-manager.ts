@@ -68,8 +68,8 @@ async function mteIdManager(
     const sessionId = request.headers[options.sessionIdHeader] as string;
     if (sessionId) {
       request.sessionId += `.${sessionId}`;
+      reply.header(options.sessionIdHeader, sessionId);
     }
-    reply.header(options.sessionIdHeader, sessionId);
 
     done();
   });
