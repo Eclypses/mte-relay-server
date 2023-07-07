@@ -33,9 +33,10 @@ async function initMte(
         const validatedCache = cacheSchema.parse(cache);
         takeState = validatedCache.takeState;
         saveState = validatedCache.saveState;
+        _fastify.log.info(`Loaded cache adapter: ${filePath}`);
       } catch (error) {
-        console.log(`Failed to load settings file: ${filePath}`);
-        console.log(error);
+        _fastify.log.error(`Failed to load cache adapter: ${filePath}`);
+        _fastify.log.error(error);
         process.exit(1);
       }
     }
@@ -47,10 +48,10 @@ async function initMte(
       saveState: saveState,
       takeState: takeState,
     });
-    console.log(`MTE instantiated successfully.`);
+    _fastify.log.info(`MTE instantiated successfully.`);
     done();
   } catch (error) {
-    console.log(error);
+    _fastify.log.error(error);
     process.exit(1);
   }
 }

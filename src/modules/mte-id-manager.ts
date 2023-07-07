@@ -49,12 +49,20 @@ async function mteIdManager(
         options.clientIdSecret
       );
       if (!verified) {
+        request.log.error(`Invalid ${options.clientIdHeader} header.`);
+        // TODO: Return MTE-Relay status code so the client can try again without including this header (which will assign them a new header).
         return reply
           .code(400)
           .send(`Invalid header: ${options.clientIdHeader}`);
       }
       clientId = verified;
     }
+
+    // log client ID
+    request.log.info(
+      { [options.clientIdHeader]: clientId },
+      options.clientIdHeader
+    );
 
     // set x-mte-relay-client-id header on every response
     const signedClientId = signAString(clientId, options.clientIdSecret);

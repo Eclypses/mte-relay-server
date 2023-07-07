@@ -3,8 +3,8 @@ import cors from "@fastify/cors";
 import crypto from "crypto";
 
 import { anonymousApiRoutes, protectedApiRoutes } from "./modules/api";
+import log from "./modules/log";
 import proxy from "./modules/proxy";
-import sqlite from "./modules/sqlite";
 import headers from "./modules/headers";
 import mteInit from "./modules/mte-init";
 import settings from "./modules/settings";
@@ -18,13 +18,14 @@ let server: FastifyInstance | null = null;
 (async () => {
   try {
     const SETTINGS = await settings();
+    const logOptions = await log();
 
     // startup checks
     await startupChecks();
 
     // create fastify server instance
     server = Fastify({
-      logger: SETTINGS.DEBUG,
+      logger: logOptions,
       genReqId: () => crypto.randomUUID(),
     });
 
@@ -32,11 +33,6 @@ let server: FastifyInstance | null = null;
     await server.register(mteInit, {
       licenseCompany: SETTINGS.LICENSE_COMPANY,
       licenseKey: SETTINGS.LICENSE_KEY,
-    });
-
-    // Register sqlite module
-    await server.register(sqlite, {
-      location: SETTINGS.PERSISTENT_DIR,
     });
 
     // Register cors plugins
@@ -66,13 +62,10 @@ let server: FastifyInstance | null = null;
       mteServerId: SETTINGS.SERVER_ID,
     });
 
-    // register anonymous api routes
-    await server.register(anonymousApiRoutes, {
-      accessToken: SETTINGS.GENERATE_MTE_REPORT_ACCESS_TOKEN,
-      companyName: SETTINGS.LICENSE_COMPANY,
-    });
+    // register anonymous API routes
+    await server.register(anonymousApiRoutes);
 
-    // register protected api routes
+    // register protected API routes
     await server.register(protectedApiRoutes, {
       clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
     });
@@ -93,10 +86,11 @@ let server: FastifyInstance | null = null;
       sessionIdHeader: SETTINGS.SESSION_ID_HEADER,
       encodedHeadersHeader: SETTINGS.ENCODED_HEADERS_HEADER,
       routes: SETTINGS.MTE_ROUTES,
+      mteUsageLogId: SETTINGS.MTE_USAGE_LOG_ID,
     });
 
     await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });
-    console.log("Server listening on: http://localhost:" + SETTINGS.PORT);
+    console.log(`Server listening on port ${SETTINGS.PORT}`);
   } catch (err) {
     console.log(err);
     server?.log.error(err);

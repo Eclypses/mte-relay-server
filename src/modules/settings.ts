@@ -14,6 +14,7 @@ const DEFAULT_OPTIONS = {
   CLIENT_ID_HEADER: `x-mte-relay-client-id`,
   SESSION_ID_HEADER: `x-mte-relay-session-id`,
   ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
+  MTE_USAGE_LOG_ID: `x-mte-usage-log`,
   PORT: 8080,
   DEBUG: false,
   PERSISTENT_DIR: persistentDir,

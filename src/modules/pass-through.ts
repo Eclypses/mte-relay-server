@@ -79,7 +79,7 @@ async function passThroughRoutes(
         // return response
         return reply.send(proxyResponse.data);
       } catch (error) {
-        console.log(error);
+        request.log.error(error);
         let message = "An unknown error occurred";
         if (error instanceof Error) {
           message = error.message;

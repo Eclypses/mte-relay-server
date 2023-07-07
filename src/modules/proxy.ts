@@ -26,15 +26,20 @@ function proxyHandler(
     sessionIdHeader: string;
     encodedHeadersHeader: string;
     maxFormDataSize: number;
+    mteUsageLogId: string;
   },
   done: any
 ) {
   // log mte usage
   fastify.addHook("onRequest", async (request, reply) => {
     if (!request.clientId) {
+      request.log.error(`Missing ${options.clientIdHeader} header.`);
       return reply.status(401).send("Unauthorized");
     }
-    request.recordMteUsage(request.clientId);
+    request.log.info(
+      { [options.mteUsageLogId]: 1, url: request.url },
+      options.mteUsageLogId
+    );
   });
 
   // parse multipart/form-data requests
@@ -253,6 +258,7 @@ function proxyHandler(
           transformResponse: (data, _headers) => data,
         });
       } catch (error: any) {
+        request.log.error(error);
         const headers = error.response?.headers;
         if (headers) {
           delete headers["access-control-allow-origin"];
@@ -358,7 +364,7 @@ function proxyHandler(
       if (tmpFilesToDelete.length > 0) {
         tmpFilesToDelete.forEach((file) => {
           fs.promises.rm(file).catch((err) => {
-            console.log(`Error deleting tmp file: ${err}`);
+            request.log.error(`Error deleting tmp file: ${err}`);
           });
         });
       }
