@@ -42,9 +42,6 @@ The configuration file is a YAML file that contains the following properties. Ex
 - `corsOrigins`
   - **Required**
   - A list of URLs that will be allowed to make cross-origin requests to the server.
-- `reportAccessToken`
-  - **Required**
-  - An access token that is required to generate a report of MTE usage. This token should be kept secret and only shared trusted parties.
 - `port`
   - The port that the server will listen on.
   - Default: `8080`.
@@ -72,7 +69,6 @@ clientIdSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
 corsOrigins:
   - https://www.my-company.com
   - https://dashboard.my-company.com
-reportAccessToken: x5l2212bAGAj81pAMm6bcB1tRipZjpDg
 ```
 
 #### Full Configuration Example
@@ -85,7 +81,6 @@ clientIdSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
 corsOrigins:
   - https://www.my-company.com
   - https://dashboard.my-company.com
-reportAccessToken: x5l2212bAGAj81pAMm6bcB1tRipZjpDg
 port: 3000
 debug: true
 passThroughRoutes:
@@ -122,9 +117,9 @@ To run MTE Relay Server in a Docker container, follow these instructions:
 - Build the Docker image with `docker build . -t mte-relay-server`
 - Run the Docker container with the command `docker compose up`
 
-### Settings Adapters
+### Settings Adapter
 
-If you don't want to (or can't) use a yaml file to load settings, you can write your own settings adapter. The settings adapter must export a function that returns a promise that resolves to a settings object with all the required settings (see above).
+If you don't want to (or can't) use a yaml file to load settings, you can write your own settings adapter. The settings adapter must export a function that returns a promise that resolves to a settings object with all the required settings (see [Configuration Options](#configuration-options)).
 
 ```javascript
 module.exports = async function () {
@@ -140,9 +135,9 @@ Then, you need to use a CLI flag to point to that settings file when starting th
 
 See more examples in the [examples/settings-adapters](examples/settings-adapters) directory.
 
-### MTE State Cache Adapters
+### MTE State Cache Adapter
 
-By default, MTE State is saved in-memory. This means that if the server is restarted, all MTE State will be lost. To persist MTE State across server restarts, you can use an external cache by writing your own cache adapter.
+By default, MTE State is saved in-memory. This means that if the server is restarted, all MTE State will be lost. To persist MTE State across server restarts, or to share MTE state between multiple containers, you can use an external cache by writing your own cache adapter.
 
 A cache adapter is a file that exports a function that returns a Promise that resolves to an object with the following methods:
 
@@ -159,11 +154,40 @@ module.exports = async function () {
 };
 ```
 
-See examples in the [examples/cache-adapters](examples/cache-adapters) directory.
-
 Then, you need to use a CLI flag to point to that cache adapter file when starting the server.
 
 `npm run start -- --cache-adapter /path_to/cache-adapter.js`
+
+See examples in the [examples/cache-adapters](examples/cache-adapters) directory.
+
+### Log Adapter
+
+MTE Relay Server is built on Fastify, which uses [Pino](https://getpino.io) for logging. By default, logs are written to the `/data/mte-relay-server.log` file. To change this, you can use a log adapter. You may [write your own Pino log transport](https://getpino.io/#/docs/transports?id=writing-a-transport), or use an [existing Pino log transport](https://getpino.io/#/docs/transports?id=pino-v7-compatible).
+
+A log adapter is a file that exports a function that returns a Promise that resolves a [Pino Transport](https://getpino.io/#/docs/transports?id=transports):
+
+Example:\
+
+```javascript
+const path = require("path");
+
+module.exports = async function () {
+  return {
+    transport: {
+      target: "pino/file",
+      options: {
+        destination: path.join(process.cwd(), "/path_to/custom.log"),
+      },
+    },
+  };
+};
+```
+
+Then, you need to use a CLI flag to point to that log adapter file when starting the server.
+
+`npm run start -- --log-adapter /path_to/log-adapter.js`
+
+See examples in the [examples/log-adapters](examples/log-adapters) directory.
 
 ### Local Development
 

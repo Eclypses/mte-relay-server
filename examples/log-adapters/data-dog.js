@@ -7,11 +7,11 @@ module.exports = async function () {
       target: "pino-datadog-transport",
       options: {
         ddServerConf: {
-          site: "us5.datadoghq.com",
+          site: "____DATADOG_SITE____", // example: "us5.datadoghq.com"
         },
         ddClientConf: {
           authMethods: {
-            apiKeyAuth: "____API_KEY____",
+            apiKeyAuth: "____API_KEY____", // example: "94b631f364251be0b6b7813bab738bad"
           },
         },
         ddsource: "nodejs",
