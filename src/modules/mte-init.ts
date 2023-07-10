@@ -11,7 +11,6 @@ const cacheSchema = z.object({
 async function initMte(
   _fastify: FastifyInstance,
   options: {
-    redisUrl?: string;
     licenseCompany: string;
     licenseKey: string;
   },

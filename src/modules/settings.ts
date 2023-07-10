@@ -31,7 +31,6 @@ const yamlSchema = z.object({
   corsOrigins: z.array(
     z.string().url({ message: "corsOrigin must be a valid URL." })
   ),
-  reportAccessToken: z.string(),
   port: z.number().optional(),
   debug: z.boolean().optional(),
   passThroughRoutes: z.array(z.string()).optional(),
@@ -77,7 +76,6 @@ export default async function () {
     LICENSE_KEY: userSettings.licenseKey,
     CORS_ORIGINS: userSettings.corsOrigins,
     CLIENT_ID_SECRET: userSettings.clientIdSecret,
-    GENERATE_MTE_REPORT_ACCESS_TOKEN: userSettings.reportAccessToken,
     DEBUG: userSettings.debug || DEFAULT_OPTIONS.DEBUG,
     OUTBOUND_PROXY_BEARER_TOKEN: userSettings.outboundProxyBearerToken,
     PASS_THROUGH_ROUTES: userSettings.passThroughRoutes || [],
