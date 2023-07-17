@@ -58,12 +58,6 @@ async function mteIdManager(
       clientId = verified;
     }
 
-    // log client ID
-    request.log.info(
-      { [options.clientIdHeader]: clientId },
-      options.clientIdHeader
-    );
-
     // set x-mte-relay-client-id header on every response
     const signedClientId = signAString(clientId, options.clientIdSecret);
     reply.header(options.clientIdHeader, signedClientId);

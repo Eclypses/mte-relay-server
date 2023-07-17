@@ -37,7 +37,7 @@ function proxyHandler(
       return reply.status(401).send("Unauthorized");
     }
     request.log.info(
-      { [options.mteUsageLogId]: 1, url: request.url },
+      { [options.clientIdHeader]: request.clientId, url: request.url },
       options.mteUsageLogId
     );
   });
