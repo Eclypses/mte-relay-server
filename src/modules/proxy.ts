@@ -26,7 +26,6 @@ function proxyHandler(
     sessionIdHeader: string;
     encodedHeadersHeader: string;
     maxFormDataSize: number;
-    mteUsageLogId: string;
   },
   done: any
 ) {
@@ -38,7 +37,7 @@ function proxyHandler(
     }
     request.log.info(
       { [options.clientIdHeader]: request.clientId, url: request.url },
-      options.mteUsageLogId
+      `MTE Proxy Route used: ${request.url}`
     );
   });
 

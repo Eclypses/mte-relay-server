@@ -86,7 +86,6 @@ let server: FastifyInstance | null = null;
       sessionIdHeader: SETTINGS.SESSION_ID_HEADER,
       encodedHeadersHeader: SETTINGS.ENCODED_HEADERS_HEADER,
       routes: SETTINGS.MTE_ROUTES,
-      mteUsageLogId: SETTINGS.MTE_USAGE_LOG_ID,
     });
 
     await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });
