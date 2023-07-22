@@ -90,7 +90,6 @@ export async function instantiateMteWasm(options: {
   }
   fillPools();
 }
-
 export async function instantiateEncoder(options: {
   id: string;
   entropy: Uint8Array;

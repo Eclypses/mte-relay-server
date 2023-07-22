@@ -1,15 +1,11 @@
-import { FastifyInstance } from "fastify";
+import { FastifyPluginCallback } from "fastify";
 import fastifyPlugin from "fastify-plugin";
 
-async function customHeader(
-  _fastify: FastifyInstance,
-  options: {
-    headers?: Record<string, string>;
-  },
-  done: any
-) {
+const addCustomHeader: FastifyPluginCallback<{
+  headers?: Record<string, string>;
+}> = (fastify, options, done) => {
   if (options.headers) {
-    _fastify.addHook("onRequest", (request, reply, _done) => {
+    fastify.addHook("onRequest", (request, reply, _done) => {
       for (const [key, value] of Object.entries(options.headers!)) {
         reply.header(key, value);
         request.headers[key] = value;
@@ -18,6 +14,6 @@ async function customHeader(
     });
   }
   done();
-}
+};
 
-export default fastifyPlugin(customHeader);
+export default fastifyPlugin(addCustomHeader);

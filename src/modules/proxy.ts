@@ -279,6 +279,8 @@ function proxyHandler(
         return reply.status(500).send("No Response.");
       }
 
+      request.log.debug(`Proxy Response Headers:\n${proxyResponse.headers}`);
+
       // create response headers
       proxyResponse.headers["access-control-allow-credentials"] = "true";
       proxyResponse.headers["access-control-allow-methods"] = reply.getHeader(

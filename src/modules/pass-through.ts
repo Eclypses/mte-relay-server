@@ -1,5 +1,5 @@
 import axios from "axios";
-import { FastifyInstance } from "fastify";
+import { FastifyPluginCallback } from "fastify";
 import { contentTypeIsText } from "../utils/is-text";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 
@@ -7,15 +7,10 @@ import { concatTwoUint8Arrays } from "../utils/concat-arrays";
  * - if a route matches the passThrough routes in options
  * - let it pass through un affected
  */
-
-async function passThroughRoutes(
-  fastify: FastifyInstance,
-  options: {
-    routes: string[];
-    upstream: string;
-  },
-  done: any
-) {
+const passThroughRoutes: FastifyPluginCallback<{
+  routes: string[];
+  upstream: string;
+}> = (fastify, options, done: any) => {
   // remove all content type parsers
   fastify.removeAllContentTypeParsers();
 
@@ -90,6 +85,6 @@ async function passThroughRoutes(
   });
 
   done();
-}
+};
 
 export default passThroughRoutes;

@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import { FastifyPluginCallback } from "fastify";
 import fastifyPlugin from "fastify-plugin";
 import crypto from "crypto";
 import { signAString, verifySignedString } from "../utils/signed-ids";
@@ -19,23 +19,19 @@ declare module "fastify" {
  *    - sessionId = MTE Client ID header + MTE Client ID header
  *        - sessionId allows new Encoder/Decoders for each separate tab/window of a website user
  */
-async function mteIdManager(
-  fastify: FastifyInstance,
-  options: {
-    clientIdSecret: string;
-    clientIdHeader: string;
-    sessionIdHeader: string;
-    serverIdHeader: string;
-    mteServerId: string;
-  },
-  done: any
-) {
+const mteIdManager: FastifyPluginCallback<{
+  clientIdSecret: string;
+  clientIdHeader: string;
+  sessionIdHeader: string;
+  serverIdHeader: string;
+  mteServerId: string;
+}> = (fastify, options, done) => {
   // decorate request object with clientId
   fastify.decorateRequest("clientId", null);
   fastify.decorateRequest("sessionId", null);
 
   // on every request
-  fastify.addHook("onRequest", (request, reply, done) => {
+  fastify.addHook("onRequest", (request, reply, _done) => {
     // add x-mte-relay-server-id header to the every response
     reply.header(options.serverIdHeader, options.mteServerId);
 
@@ -73,10 +69,10 @@ async function mteIdManager(
       reply.header(options.sessionIdHeader, sessionId);
     }
 
-    done();
+    _done();
   });
 
   done();
-}
+};
 
 export default fastifyPlugin(mteIdManager);

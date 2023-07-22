@@ -1,4 +1,4 @@
-import { FastifyInstance } from "fastify";
+import { FastifyPluginCallback } from "fastify";
 import fastifyPlugin from "fastify-plugin";
 import { instantiateMteWasm } from "./mte";
 import { z } from "zod";
@@ -8,14 +8,10 @@ const cacheSchema = z.object({
   saveState: z.function(),
 });
 
-async function initMte(
-  _fastify: FastifyInstance,
-  options: {
-    licenseCompany: string;
-    licenseKey: string;
-  },
-  done: any
-) {
+const initMte: FastifyPluginCallback<{
+  licenseCompany: string;
+  licenseKey: string;
+}> = async (fastify, options, done) => {
   try {
     let takeState: any = undefined;
     let saveState: any = undefined;
@@ -32,10 +28,10 @@ async function initMte(
         const validatedCache = cacheSchema.parse(cache);
         takeState = validatedCache.takeState;
         saveState = validatedCache.saveState;
-        _fastify.log.info(`Loaded cache adapter: ${filePath}`);
+        fastify.log.info(`Loaded cache adapter: ${filePath}`);
       } catch (error) {
-        _fastify.log.error(`Failed to load cache adapter: ${filePath}`);
-        _fastify.log.error(error);
+        fastify.log.error(`Failed to load cache adapter: ${filePath}`);
+        fastify.log.error(error);
         process.exit(1);
       }
     }
@@ -47,12 +43,12 @@ async function initMte(
       saveState: saveState,
       takeState: takeState,
     });
-    _fastify.log.info(`MTE instantiated successfully.`);
+    fastify.log.info(`MTE instantiated successfully.`);
     done();
   } catch (error) {
-    _fastify.log.error(error);
+    fastify.log.error(error);
     process.exit(1);
   }
-}
+};
 
 export default fastifyPlugin(initMte);
