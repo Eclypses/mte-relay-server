@@ -279,7 +279,9 @@ function proxyHandler(
         return reply.status(500).send("No Response.");
       }
 
-      request.log.debug(`Proxy Response Headers:\n${proxyResponse.headers}`);
+      request.log.debug(
+        `Proxy Response Headers - Original:\n${proxyResponse.headers}`
+      );
 
       // create response headers
       proxyResponse.headers["access-control-allow-credentials"] = "true";
@@ -322,6 +324,10 @@ function proxyHandler(
       delete proxyResponseHeaders["access-control-allow-origin"];
       proxyResponseHeaders[options.encodedHeadersHeader];
 
+      request.log.debug(
+        `Proxy Response Headers - Modified:\n${proxyResponse.headers}`
+      );
+
       // encode headers
       const headersToEncode: Record<string, string> = {};
       const contentTypeHeader = proxyResponse.headers["content-type"];
@@ -348,7 +354,7 @@ function proxyHandler(
       // if no body, send reply
       const _body = proxyResponse.data;
       if (!_body) {
-        reply.send();
+        return reply.send();
       }
 
       // encode body
