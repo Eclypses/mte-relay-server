@@ -4,10 +4,11 @@ const path = require("path");
 
 module.exports = async function () {
   return {
+    level: "info",
     transport: {
       target: "pino/file",
       options: {
-        destination: path.join(process.cwd(), "data/custom-log.log"),
+        destination: path.join(process.cwd(), "data/mte-relay.log"),
       },
     },
   };

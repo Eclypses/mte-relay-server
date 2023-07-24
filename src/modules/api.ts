@@ -39,16 +39,15 @@ export const protectedApiRoutes: FastifyPluginCallback<{
 
       // create encoder
       const encoderNonce = getNonce();
-      request.log.debug("encoder nonce", encoderNonce);
+      request.log.debug(`encoder nonce: ${encoderNonce}`);
       request.log.debug(
-        "encoder personalization",
-        validationResult.data.decoderPersonalizationStr
+        `encoder personalization: ${validationResult.data.decoderPersonalizationStr}`
       );
       const encoderEcdh = getEcdh();
       const encoderEntropy = encoderEcdh.computeSharedSecret(
         validationResult.data.decoderPublicKey
       );
-      request.log.debug("encoderEntropy", encoderEntropy.toString());
+      request.log.debug(`encoderEntropy: ${encoderEntropy.toString()}`);
       instantiateEncoder({
         id: `encoder.${request.sessionId}`,
         entropy: encoderEntropy,
@@ -58,16 +57,15 @@ export const protectedApiRoutes: FastifyPluginCallback<{
 
       // create decoder
       const decoderNonce = getNonce();
-      request.log.debug("decoder nonce", decoderNonce);
+      request.log.debug(`decoder nonce: ${decoderNonce}`);
       request.log.debug(
-        "decoder personalization",
-        validationResult.data.encoderPersonalizationStr
+        `decoder personalization: ${validationResult.data.encoderPersonalizationStr}`
       );
       const decoderEcdh = getEcdh();
       const decoderEntropy = decoderEcdh.computeSharedSecret(
         validationResult.data.encoderPublicKey
       );
-      request.log.debug("decoderEntropy", decoderEntropy.toString());
+      request.log.debug(`decoderEntropy: ${decoderEntropy.toString()}`);
       instantiateDecoder({
         id: `decoder.${request.sessionId}`,
         entropy: decoderEntropy,

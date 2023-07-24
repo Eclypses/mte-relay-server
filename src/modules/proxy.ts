@@ -324,6 +324,13 @@ function proxyHandler(
       delete proxyResponseHeaders["access-control-allow-origin"];
       proxyResponseHeaders[options.encodedHeadersHeader];
 
+      // cookies are a special case, just copy them over from the original request headers object
+      if (proxyResponse.headers["set-cookie"]) {
+        proxyResponse.headers["set-cookie"]?.forEach((value) => {
+          proxyResponseHeaders["set-cookie"] = value;
+        });
+      }
+
       request.log.debug(
         `Proxy Response Headers - Modified:\n${proxyResponse.headers}`
       );

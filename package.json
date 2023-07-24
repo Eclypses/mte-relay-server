@@ -1,6 +1,6 @@
 {
   "name": "mte-relay-server",
-  "version": "2.1.5",
+  "version": "2.1.6",
   "description": "",
   "scripts": {
     "dev": "nodemon --watch src src/index.ts -- --log-adapter ../../examples/log-adapters/stdout.js",
