@@ -326,9 +326,9 @@ function proxyHandler(
 
       // cookies are a special case, just copy them over from the original request headers object
       if (proxyResponse.headers["set-cookie"]) {
-        proxyResponse.headers["set-cookie"]?.forEach((value) => {
-          proxyResponseHeaders["set-cookie"] = value;
-        });
+        proxyResponseHeaders["set-cookie"] = proxyResponse.headers[
+          "set-cookie"
+        ] as unknown as string;
       }
 
       request.log.debug(
