@@ -22,7 +22,7 @@ const passThroughRoutes: FastifyPluginCallback<{
       _buffer = concatTwoUint8Arrays(_buffer, chunk);
     });
     payload.on("end", () => {
-      done(null, _buffer);
+      done(null, _buffer.length > 0 ? _buffer : undefined);
     });
   });
 
