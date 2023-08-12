@@ -44,6 +44,7 @@ let server: FastifyInstance | null = null;
         SETTINGS.SERVER_ID_HEADER,
         SETTINGS.CLIENT_ID_HEADER,
         SETTINGS.SESSION_ID_HEADER,
+        SETTINGS.PAIR_ID_HEADER,
         SETTINGS.ENCODED_HEADERS_HEADER,
       ],
     });
@@ -58,6 +59,7 @@ let server: FastifyInstance | null = null;
       clientIdSecret: SETTINGS.CLIENT_ID_SECRET,
       clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
       sessionIdHeader: SETTINGS.SESSION_ID_HEADER,
+      pairIdHeader: SETTINGS.PAIR_ID_HEADER,
       serverIdHeader: SETTINGS.SERVER_ID_HEADER,
       mteServerId: SETTINGS.SERVER_ID,
     });
@@ -84,6 +86,7 @@ let server: FastifyInstance | null = null;
       clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
       maxFormDataSize: SETTINGS.MAX_FORM_DATA_SIZE,
       sessionIdHeader: SETTINGS.SESSION_ID_HEADER,
+      pairIdHeader: SETTINGS.PAIR_ID_HEADER,
       encodedHeadersHeader: SETTINGS.ENCODED_HEADERS_HEADER,
       routes: SETTINGS.MTE_ROUTES,
     });

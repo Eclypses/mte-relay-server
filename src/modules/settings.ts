@@ -13,6 +13,7 @@ const DEFAULT_OPTIONS = {
   SERVER_ID_HEADER: `x-mte-relay-server-id`,
   CLIENT_ID_HEADER: `x-mte-relay-client-id`,
   SESSION_ID_HEADER: `x-mte-relay-session-id`,
+  PAIR_ID_HEADER: `x-mte-relay-pair-id`,
   ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
   PORT: 8080,
   DEBUG: false,

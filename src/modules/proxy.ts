@@ -24,6 +24,7 @@ function proxyHandler(
     outboundToken?: string;
     clientIdHeader: string;
     sessionIdHeader: string;
+    pairIdHeader: string;
     encodedHeadersHeader: string;
     maxFormDataSize: number;
   },
@@ -34,6 +35,13 @@ function proxyHandler(
     if (!request.clientId) {
       request.log.error(`Missing ${options.clientIdHeader} header.`);
       return reply.status(401).send("Unauthorized");
+    }
+    if (!request.pairId) {
+      const err = new MteRelayError(
+        "PairID Header (or sessionID) is required, but not found."
+      );
+      request.log.error(err.message);
+      return reply.status(err.status).send(err.message);
     }
     request.log.info(
       { [options.clientIdHeader]: request.clientId, url: request.url },
@@ -95,6 +103,7 @@ function proxyHandler(
       const proxyHeaders = cloneHeaders(request.headers);
       delete proxyHeaders[options.clientIdHeader];
       delete proxyHeaders[options.sessionIdHeader];
+      delete proxyHeaders[options.pairIdHeader];
       delete proxyHeaders["content-length"];
       proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
 
@@ -111,7 +120,7 @@ function proxyHandler(
       ] as string;
       if (encodedHeaders) {
         const decodedHeaders = await mkeDecode(encodedHeaders, {
-          stateId: `decoder.${request.sessionId}`,
+          stateId: `decoder.${request.clientId}.${request.pairId}`,
           output: "str",
         });
         const headers = JSON.parse(decodedHeaders as string);
@@ -162,13 +171,13 @@ function proxyHandler(
         for (; i < iMax; ++i) {
           const _field = fields[i];
           const decodedFieldName = await mkeDecode(_field.fieldname, {
-            stateId: `decoder.${request.sessionId}`,
+            stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "str",
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
           });
           const decodedFieldValue = await mkeDecode(_field.value, {
-            stateId: `decoder.${request.sessionId}`,
+            stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "str",
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
@@ -182,14 +191,14 @@ function proxyHandler(
         for (; ii < iiMax; ii++) {
           const _file = files[ii];
           const decodedFieldName = await mkeDecode(_file.fieldname, {
-            stateId: `decoder.${request.sessionId}`,
+            stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "str",
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
           });
           const fieldName = decodeURIComponent(_file.filename);
           const decodedFileName = await mkeDecode(fieldName, {
-            stateId: `decoder.${request.sessionId}`,
+            stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "str",
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
@@ -197,7 +206,7 @@ function proxyHandler(
           const buffer = await _file.toBuffer();
           const u8 = new Uint8Array(buffer);
           const decodedFile = await mkeDecode(u8, {
-            stateId: `decoder.${request.sessionId}`,
+            stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "Uint8Array",
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
@@ -232,7 +241,7 @@ function proxyHandler(
         let decodedPayload: any = request.body;
         if (request.body) {
           decodedPayload = await mkeDecode(request.body as any, {
-            stateId: `decoder.${request.sessionId}`,
+            stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: contentTypeIsText(contentType) ? "str" : "Uint8Array",
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
@@ -346,7 +355,7 @@ function proxyHandler(
       });
       const encodedHeadersJson = JSON.stringify(headersToEncode);
       const encodedResponseHeaders = await mkeEncode(encodedHeadersJson, {
-        stateId: `encoder.${request.sessionId}`,
+        stateId: `encoder.${request.clientId}.${request.pairId}`,
         output: "B64",
       }).catch((err) => {
         throw new MteRelayError("Failed to encode.", err);
@@ -366,7 +375,7 @@ function proxyHandler(
 
       // encode body
       const encodedBody = await mkeEncode(_body, {
-        stateId: `encoder.${request.sessionId}`,
+        stateId: `encoder.${request.clientId}.${request.pairId}`,
         output: "Uint8Array",
       }).catch((err) => {
         throw new MteRelayError("Failed to encode.", err);

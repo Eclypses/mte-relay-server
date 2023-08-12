@@ -3,6 +3,7 @@ import { z } from "zod";
 import { getEcdh } from "../utils/ecdh";
 import { instantiateEncoder, instantiateDecoder } from "./mte";
 import { getNonce } from "../utils/nonce";
+import { MteRelayError } from "./mte/errors";
 
 /**
  * Protect API Routes that require x-mte-id header
@@ -26,10 +27,20 @@ export const protectedApiRoutes: FastifyPluginCallback<{
     decoderPublicKey: z.string(),
     decoderPersonalizationStr: z.string(),
   });
+  const mtePairArraySchema = z.array(
+    z.object({
+      pairId: z.string(),
+      encoderPublicKey: z.string(),
+      encoderPersonalizationStr: z.string(),
+      decoderPublicKey: z.string(),
+      decoderPersonalizationStr: z.string(),
+    })
+  );
+  const bodySchema = z.union([mtePairSchema, mtePairArraySchema]);
   fastify.post("/api/mte-pair", async (request, reply) => {
     try {
       // validate request body
-      const validationResult = mtePairSchema.safeParse(request.body);
+      const validationResult = bodySchema.safeParse(request.body);
       if (!validationResult.success) {
         request.log.error(validationResult.error);
         return reply
@@ -37,19 +48,57 @@ export const protectedApiRoutes: FastifyPluginCallback<{
           .send(JSON.stringify(validationResult.error, null, 2));
       }
 
+      if (Array.isArray(validationResult.data)) {
+        const returnInitValues = [];
+        // create encoders and decoders
+        for (const pair of validationResult.data) {
+          // create encoder
+          const encoderNonce = getNonce();
+          const encoderEcdh = getEcdh();
+          const encoderEntropy = encoderEcdh.computeSharedSecret(
+            pair.decoderPublicKey
+          );
+          instantiateEncoder({
+            id: `encoder.${request.clientId}.${pair.pairId}`,
+            entropy: encoderEntropy,
+            nonce: encoderNonce,
+            personalization: pair.decoderPersonalizationStr,
+          });
+
+          // create decoder
+          const decoderNonce = getNonce();
+          const decoderEcdh = getEcdh();
+          const decoderEntropy = decoderEcdh.computeSharedSecret(
+            pair.encoderPublicKey
+          );
+          instantiateDecoder({
+            id: `decoder.${request.clientId}.${pair.pairId}`,
+            entropy: decoderEntropy,
+            nonce: decoderNonce,
+            personalization: pair.encoderPersonalizationStr,
+          });
+
+          returnInitValues.push({
+            pairId: pair.pairId,
+            encoderNonce,
+            encoderPublicKey: encoderEcdh.publicKey,
+            decoderNonce,
+            decoderPublicKey: decoderEcdh.publicKey,
+          });
+        }
+
+        // send response
+        return reply.status(200).send(returnInitValues);
+      }
+
       // create encoder
       const encoderNonce = getNonce();
-      request.log.debug(`encoder nonce: ${encoderNonce}`);
-      request.log.debug(
-        `encoder personalization: ${validationResult.data.decoderPersonalizationStr}`
-      );
       const encoderEcdh = getEcdh();
       const encoderEntropy = encoderEcdh.computeSharedSecret(
         validationResult.data.decoderPublicKey
       );
-      request.log.debug(`encoderEntropy: ${encoderEntropy.toString()}`);
       instantiateEncoder({
-        id: `encoder.${request.sessionId}`,
+        id: `encoder.${request.clientId}.${request.pairId}`,
         entropy: encoderEntropy,
         nonce: encoderNonce,
         personalization: validationResult.data.decoderPersonalizationStr,
@@ -57,17 +106,12 @@ export const protectedApiRoutes: FastifyPluginCallback<{
 
       // create decoder
       const decoderNonce = getNonce();
-      request.log.debug(`decoder nonce: ${decoderNonce}`);
-      request.log.debug(
-        `decoder personalization: ${validationResult.data.encoderPersonalizationStr}`
-      );
       const decoderEcdh = getEcdh();
       const decoderEntropy = decoderEcdh.computeSharedSecret(
         validationResult.data.encoderPublicKey
       );
-      request.log.debug(`decoderEntropy: ${decoderEntropy.toString()}`);
       instantiateDecoder({
-        id: `decoder.${request.sessionId}`,
+        id: `decoder.${request.clientId}.${request.pairId}`,
         entropy: decoderEntropy,
         nonce: decoderNonce,
         personalization: validationResult.data.encoderPersonalizationStr,
@@ -82,7 +126,17 @@ export const protectedApiRoutes: FastifyPluginCallback<{
       });
     } catch (error) {
       request.log.error(error);
-      reply.status(500).send({ error: (error as Error).message });
+      if (error instanceof MteRelayError) {
+        return reply.status(error.status).send({
+          error: error.message,
+          info: error.info,
+        });
+      }
+      let msg = "An unknown error occurred";
+      if (error instanceof Error) {
+        msg = error.message;
+      }
+      reply.status(500).send(msg);
     }
   });
 

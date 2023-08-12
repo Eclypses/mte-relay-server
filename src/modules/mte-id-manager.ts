@@ -2,12 +2,13 @@ import { FastifyPluginCallback } from "fastify";
 import fastifyPlugin from "fastify-plugin";
 import crypto from "crypto";
 import { signAString, verifySignedString } from "../utils/signed-ids";
+import { MteRelayError } from "./mte/errors";
 
 // extend FastifyRequest interface with decorator method
 declare module "fastify" {
   interface FastifyRequest {
     clientId: null | string;
-    sessionId: null | string;
+    pairId: null | string;
   }
 }
 
@@ -23,52 +24,67 @@ const mteIdManager: FastifyPluginCallback<{
   clientIdSecret: string;
   clientIdHeader: string;
   sessionIdHeader: string;
+  pairIdHeader: string;
   serverIdHeader: string;
   mteServerId: string;
 }> = (fastify, options, done) => {
   // decorate request object with clientId
   fastify.decorateRequest("clientId", null);
-  fastify.decorateRequest("sessionId", null);
+  fastify.decorateRequest("pairId", null);
 
   // on every request
   fastify.addHook("onRequest", (request, reply, _done) => {
-    // add x-mte-relay-server-id header to the every response
-    reply.header(options.serverIdHeader, options.mteServerId);
+    try {
+      // add x-mte-relay-server-id header to the every response
+      reply.header(options.serverIdHeader, options.mteServerId);
 
-    // get x-mte-relay-client-id header from request
-    // if it exists, verify it, else set a new ID
-    const clientIdHeader = request.headers[options.clientIdHeader] as string;
-    let clientId: string = crypto.randomUUID();
-    if (clientIdHeader) {
-      const verified = verifySignedString(
-        clientIdHeader,
-        options.clientIdSecret
-      );
-      if (!verified) {
-        request.log.error(`Invalid ${options.clientIdHeader} header.`);
-        // TODO: Return MTE-Relay status code so the client can try again without including this header (which will assign them a new header).
-        return reply
-          .code(400)
-          .send(`Invalid header: ${options.clientIdHeader}`);
+      // get x-mte-relay-client-id header from request
+      // if it exists, verify it, else set a new ID
+      const clientIdHeader = request.headers[options.clientIdHeader] as string;
+      let clientId: string = crypto.randomUUID();
+      if (clientIdHeader) {
+        const verified = verifySignedString(
+          clientIdHeader,
+          options.clientIdSecret
+        );
+        if (!verified) {
+          request.log.error(`Invalid ${options.clientIdHeader} header.`);
+          throw new MteRelayError("Invalid Client ID header.");
+        }
+        clientId = verified;
       }
-      clientId = verified;
+
+      // set x-mte-relay-client-id header on every response
+      const signedClientId = signAString(clientId, options.clientIdSecret);
+      reply.header(options.clientIdHeader, signedClientId);
+
+      // use x-mte-relay-client-id header to decorate request object with clientId
+      request.clientId = clientId;
+
+      // pair ID is clientId OR clientId.sessionId
+      let pairId = request.headers[options.pairIdHeader] as string;
+      if (!pairId) {
+        pairId = request.headers[options.sessionIdHeader] as string;
+      }
+      if (pairId) {
+        request.pairId = pairId;
+        reply.header(options.pairIdHeader, pairId);
+      }
+    } catch (error) {
+      request.log.error(error);
+      if (error instanceof MteRelayError) {
+        reply.status(error.status).send({
+          error: error.message,
+          info: error.info,
+        });
+      } else {
+        let msg = "An unknown error occurred";
+        if (error instanceof Error) {
+          msg = error.message;
+        }
+        reply.status(500).send(msg);
+      }
     }
-
-    // set x-mte-relay-client-id header on every response
-    const signedClientId = signAString(clientId, options.clientIdSecret);
-    reply.header(options.clientIdHeader, signedClientId);
-
-    // use x-mte-relay-client-id header to decorate request object with clientId
-    request.clientId = clientId;
-
-    // session ID is clientId OR clientId.sessionId
-    request.sessionId = request.clientId;
-    const sessionId = request.headers[options.sessionIdHeader] as string;
-    if (sessionId) {
-      request.sessionId += `.${sessionId}`;
-      reply.header(options.sessionIdHeader, sessionId);
-    }
-
     _done();
   });
 

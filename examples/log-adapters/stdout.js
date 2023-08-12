@@ -2,9 +2,9 @@
 
 module.exports = async function () {
   return {
+    level: "debug",
     transport: {
       target: "pino-pretty",
-      level: "debug",
       options: {
         translateTime: "HH:MM:ss",
         ignore: "pid,hostname",

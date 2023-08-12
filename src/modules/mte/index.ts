@@ -133,7 +133,7 @@ export async function mkeEncode(
     });
   }
   restoreMteState(encoder, currentState);
-  const nextStateResult = encoder.encodeStr("eclypses");
+  const nextStateResult = encoder.encodeStr(""); // Note: intentionally left empty for NextEncoderStateGeneration
   validateStatusIsSuccess(nextStateResult.status, encoder);
   const nextState = getMteState(encoder);
   await cache.saveState(options.stateId, nextState);
