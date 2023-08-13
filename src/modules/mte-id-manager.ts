@@ -63,12 +63,14 @@ const mteIdManager: FastifyPluginCallback<{
 
       // pair ID is clientId OR clientId.sessionId
       let pairId = request.headers[options.pairIdHeader] as string;
-      if (!pairId) {
+      if (pairId) {
+        reply.header(options.pairIdHeader, pairId);
+      } else {
         pairId = request.headers[options.sessionIdHeader] as string;
+        reply.header(options.sessionIdHeader, pairId);
       }
       if (pairId) {
         request.pairId = pairId;
-        reply.header(options.pairIdHeader, pairId);
       }
     } catch (error) {
       request.log.error(error);
