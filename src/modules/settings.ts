@@ -23,7 +23,7 @@ const DEFAULT_OPTIONS = {
 };
 
 // schema for validating settings passed into server
-const yamlSchema = z.object({
+const settingsSchema = z.object({
   upstream: z.string().url({ message: "upstream must be a valid URL." }),
   licenseCompany: z.string(),
   licenseKey: z.string(),
@@ -39,6 +39,7 @@ const yamlSchema = z.object({
   maxFormDataSize: z.number().optional(),
   headers: z.object({}).passthrough().optional(),
   mteRoutes: z.array(z.string()).optional(),
+  serverId: z.string().optional(),
 });
 
 // default function for generating settings
@@ -66,7 +67,7 @@ export default async function () {
   }
 
   // validate user provided settings
-  const userSettings = yamlSchema.parse(_settings);
+  const userSettings = settingsSchema.parse(_settings);
 
   // map user settings to app settings object
   const _userSettings = {
@@ -83,6 +84,7 @@ export default async function () {
       userSettings.maxFormDataSize || DEFAULT_OPTIONS.MAX_FORM_DATA_SIZE,
     HEADERS: userSettings.headers,
     MTE_ROUTES: userSettings.mteRoutes,
+    SERVER_ID: userSettings.serverId || DEFAULT_OPTIONS.SERVER_ID,
   };
 
   // SET CORs methods
