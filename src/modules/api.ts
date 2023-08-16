@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getEcdh } from "../utils/ecdh";
 import { instantiateEncoder, instantiateDecoder } from "./mte";
 import { getNonce } from "../utils/nonce";
-import { MteRelayError } from "./mte/errors";
+import { MTE_ERRORS, MteRelayError } from "./mte/errors";
 
 /**
  * Protect API Routes that require x-mte-id header
@@ -152,12 +152,16 @@ export const anonymousApiRoutes: FastifyPluginCallback<{}> = (
   done
 ) => {
   // echo endpoint
-  fastify.get("/api/echo/:msg?", (request, reply) => {
+  fastify.get("/api/mte-echo/:msg?", (request, reply) => {
     reply.send({
       // @ts-ignore
       echo: request.params?.msg || true,
       time: Date.now(),
     });
+  });
+
+  fastify.get("/api/mte-errors", (request, reply) => {
+    reply.send(MTE_ERRORS);
   });
 
   // HEAD /api/mte-relay
