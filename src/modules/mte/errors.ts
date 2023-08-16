@@ -1,4 +1,4 @@
-const MTE_ERRORS = {
+export const MTE_ERRORS = {
   "Repair is required.": 559,
   "State not found.": 560,
   "Failed to encode.": 561,
