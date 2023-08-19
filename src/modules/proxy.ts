@@ -392,11 +392,9 @@ function proxyHandler(
         });
       }
     } catch (error) {
+      request.log.error(error);
       if (error instanceof MteRelayError) {
-        return reply.status(error.status).send({
-          error: error.message,
-          info: error.info,
-        });
+        return reply.status(error.status).send(error);
       }
       let msg = "An unknown error occurred";
       if (error instanceof Error) {
