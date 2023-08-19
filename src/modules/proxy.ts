@@ -128,6 +128,7 @@ function proxyHandler(
           mkeDecodedHeaders[key] = value as string;
           proxyHeaders[key] = value as string;
         });
+        request.log.debug(`Decoded Headers:\n${JSON.stringify(headers)}`);
       }
 
       /**
