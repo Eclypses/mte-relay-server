@@ -38,7 +38,7 @@ The configuration file is a YAML file that contains the following properties. Ex
   - Your license key. See your project settings in the [Eclypses Developer's Portal](https://developers.eclypses.com).
 - `clientIdSecret`
   - **Required**
-  - A secret that will be used to sign the x-mte-client-id header.
+  - A secret that will be used to sign the x-mte-client-id header. A 32+ character string is recommended.
 - `corsOrigins`
   - **Required**
   - A list of URLs that will be allowed to make cross-origin requests to the server.
@@ -58,6 +58,11 @@ The configuration file is a YAML file that contains the following properties. Ex
   - Note: `OPTIONS` and `HEAD` are always allowed.
 - `headers`
   - An object of headers that will be added to all request/responses.
+- `serverId`
+  - A unique identifier for this server. A GUID or 32+ character string is recommended. Use this when load balancing multiple instances of MTE Relay Server so they all have the same server ID.
+- `maxFormDataSize`
+  - The maximum size of a form data request body in bytes. If a request body is larger than this, it will be rejected with a 413 error.
+  - Default: `20,971,520` - 20 MB
 
 #### Minimal Configuration Example
 
@@ -95,6 +100,8 @@ corsMethods:
   - DELETE
 headers:
   x-service-name: mte-relay
+serverId: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
+maxFormDataSize: 20971520
 ```
 
 ### Local Implementation
@@ -193,3 +200,7 @@ See examples in the [examples/log-adapters](examples/log-adapters) directory.
 
 - Follow the quick start guide to configure requires files and install dependencies.
 - Run `npm run dev` to start the server in development mode.
+
+### Load Balancing
+
+When load balancing two or more MTE Relay Servers, it is important that they all use the same cache adapter and server ID. This will ensure that MTE State is shared between all servers.
