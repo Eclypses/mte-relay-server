@@ -11,6 +11,7 @@ const cacheSchema = z.object({
 const initMte: FastifyPluginCallback<{
   licenseCompany: string;
   licenseKey: string;
+  maxPoolSize: number;
 }> = async (fastify, options, done) => {
   try {
     let takeState: any = undefined;
@@ -42,6 +43,7 @@ const initMte: FastifyPluginCallback<{
       licenseKey: options.licenseKey,
       saveState: saveState,
       takeState: takeState,
+      encoderDecoderPoolSize: options.maxPoolSize,
     });
     fastify.log.info(`MTE instantiated successfully.`);
     done();

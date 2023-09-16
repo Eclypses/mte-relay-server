@@ -9,6 +9,7 @@ declare module "fastify" {
   interface FastifyRequest {
     clientId: null | string;
     pairId: null | string;
+    encoderType: "MKE" | "MTE";
   }
 }
 
@@ -27,14 +28,22 @@ const mteIdManager: FastifyPluginCallback<{
   pairIdHeader: string;
   serverIdHeader: string;
   mteServerId: string;
+  encoderTypeHeader: string;
 }> = (fastify, options, done) => {
-  // decorate request object with clientId
   fastify.decorateRequest("clientId", null);
   fastify.decorateRequest("pairId", null);
+  fastify.decorateRequest("encoderType", "MKE");
 
   // on every request
   fastify.addHook("onRequest", (request, reply, _done) => {
     try {
+      // get encoder type, mirror on response
+      const encoderType = request.headers[options.encoderTypeHeader] as string;
+      if (encoderType && ["MKE", "MTE"].includes(encoderType)) {
+        request.encoderType = encoderType as "MKE" | "MTE";
+      }
+      reply.header(options.encoderTypeHeader, request.encoderType);
+
       // add x-mte-relay-server-id header to the every response
       reply.header(options.serverIdHeader, options.mteServerId);
 
@@ -75,17 +84,16 @@ const mteIdManager: FastifyPluginCallback<{
     } catch (error) {
       request.log.error(error);
       if (error instanceof MteRelayError) {
-        reply.status(error.status).send({
+        return reply.status(error.status).send({
           error: error.message,
           info: error.info,
         });
-      } else {
-        let msg = "An unknown error occurred";
-        if (error instanceof Error) {
-          msg = error.message;
-        }
-        reply.status(500).send(msg);
       }
+      let msg = "An unknown error occurred";
+      if (error instanceof Error) {
+        msg = error.message;
+      }
+      return reply.status(500).send(msg);
     }
     _done();
   });
