@@ -63,6 +63,9 @@ The configuration file is a YAML file that contains the following properties. Ex
 - `maxFormDataSize`
   - The maximum size of a form data request body in bytes. If a request body is larger than this, it will be rejected with a 413 error.
   - Default: `20,971,520` - 20 MB
+- `maxPoolSize`
+  - The number of encoder objects and decoder objects held in a pool. A larger pool will consume more memory, but it will also handle more traffic more quickly. This number is applied to all four pools; the MTE Encoder, MTE Decoder, MKE Encoder, and MKE Decoder pools.
+  - Default: `25`
 
 #### Minimal Configuration Example
 

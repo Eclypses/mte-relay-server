@@ -1,4 +1,6 @@
 import {
+  MteEnc,
+  MteDec,
   MteMkeEnc,
   MteMkeDec,
   MteWasm,
@@ -10,6 +12,8 @@ import {
 import { setItem, takeItem } from "./memory-cache";
 import { MteRelayError } from "./errors";
 
+type EncDecTypes = "MTE" | "MKE";
+
 let mteWasm: MteWasm;
 
 const cache = {
@@ -17,46 +21,79 @@ const cache = {
   takeState: takeItem,
 };
 
-const MAX_POOL_SIZE = 10;
+const mteEncoderPool: MteEnc[] = [];
+const mteDecoderPool: MteDec[] = [];
+const mkeEncoderPool: MteMkeEnc[] = [];
+const mkeDecoderPool: MteMkeDec[] = [];
 
-const encoderPool: MteMkeEnc[] = [];
-const decoderPool: MteMkeDec[] = [];
-
-function fillPools() {
+let MAX_POOL_SIZE = 25;
+function fillPools(max: number) {
+  MAX_POOL_SIZE = max;
   let i = 0;
   while (i < MAX_POOL_SIZE) {
-    encoderPool.push(MteMkeEnc.fromdefault(mteWasm));
-    decoderPool.push(MteMkeDec.fromdefault(mteWasm, 1000, -63));
+    mkeEncoderPool.push(MteMkeEnc.fromdefault(mteWasm));
+    mkeDecoderPool.push(MteMkeDec.fromdefault(mteWasm, 1000, -63));
+    mteEncoderPool.push(MteEnc.fromdefault(mteWasm));
+    mteDecoderPool.push(MteDec.fromdefault(mteWasm));
     i++;
   }
 }
-function getEncoderFromPool() {
-  const encoder = encoderPool.pop();
+function getEncoderFromPool(type: EncDecTypes) {
+  if (type === "MTE") {
+    const encoder = mteEncoderPool.pop();
+    if (!encoder) {
+      return MteEnc.fromdefault(mteWasm);
+    }
+    return encoder;
+  }
+  const encoder = mkeEncoderPool.pop();
   if (!encoder) {
     return MteMkeEnc.fromdefault(mteWasm);
   }
   return encoder;
 }
-function getDecoderFromPool() {
-  const decoder = decoderPool.pop();
+function getDecoderFromPool(type: EncDecTypes) {
+  if (type === "MTE") {
+    console.log(`getDecoderFromPool: ${type}`);
+    const decoder = mteDecoderPool.pop();
+    if (!decoder) {
+      return MteDec.fromdefault(mteWasm, 1000, -63);
+    }
+    return decoder;
+  }
+  const decoder = mkeDecoderPool.pop();
   if (!decoder) {
     return MteMkeDec.fromdefault(mteWasm, 1000, -63);
   }
   return decoder;
 }
-function returnEncoderToPool(encoder: MteMkeEnc) {
-  if (encoderPool.length < MAX_POOL_SIZE) {
+function returnEncoderToPool(encoder: MteMkeEnc | MteEnc) {
+  if (encoder instanceof MteEnc) {
+    if (mteEncoderPool.length < MAX_POOL_SIZE) {
+      encoder.uninstantiate();
+      return mteEncoderPool.push(encoder);
+    }
+    return encoder.destruct();
+  }
+  if (mkeEncoderPool.length < MAX_POOL_SIZE) {
     encoder.uninstantiate();
-    return encoderPool.push(encoder);
+    return mkeEncoderPool.push(encoder);
   }
-  encoder.destruct();
+  return encoder.destruct();
 }
-function returnDecoderToPool(decoder: MteMkeDec) {
-  if (decoderPool.length < MAX_POOL_SIZE) {
-    decoder.uninstantiate();
-    return decoderPool.push(decoder);
+function returnDecoderToPool(decoder: MteMkeDec | MteDec) {
+  if (decoder instanceof MteDec) {
+    if (mteDecoderPool.length < MAX_POOL_SIZE) {
+      decoder.uninstantiate();
+      return mteDecoderPool.push(decoder);
+    }
+    return decoder.destruct();
   }
-  decoder.destruct();
+  if (mkeDecoderPool.length < MAX_POOL_SIZE) {
+    decoder.uninstantiate();
+    return mkeDecoderPool.push(decoder);
+  }
+  return decoder.destruct();
 }
 
 // init MteWasm
@@ -65,6 +102,7 @@ export async function instantiateMteWasm(options: {
   companyName: string;
   saveState?: (id: string, value: string) => Promise<void>;
   takeState?: (id: string) => Promise<string | null>;
+  encoderDecoderPoolSize: number;
 }) {
   if (mteWasm) {
     return;
@@ -88,7 +126,7 @@ export async function instantiateMteWasm(options: {
   if (options.takeState) {
     cache.takeState = options.takeState;
   }
-  fillPools();
+  fillPools(options.encoderDecoderPoolSize);
 }
 export async function instantiateEncoder(options: {
   id: string;
@@ -96,7 +134,7 @@ export async function instantiateEncoder(options: {
   nonce: string;
   personalization: string;
 }) {
-  const encoder = getEncoderFromPool();
+  const encoder = getEncoderFromPool("MKE");
   encoder.setEntropyArr(options.entropy);
   encoder.setNonce(options.nonce);
   const initResult = encoder.instantiate(options.personalization);
@@ -111,7 +149,7 @@ export async function instantiateDecoder(options: {
   nonce: string;
   personalization: string;
 }) {
-  const decoder = getDecoderFromPool();
+  const decoder = getDecoderFromPool("MKE");
   decoder.setEntropyArr(options.entropy);
   decoder.setNonce(options.nonce);
   const initResult = decoder.instantiate(options.personalization);
@@ -122,9 +160,13 @@ export async function instantiateDecoder(options: {
 }
 export async function mkeEncode(
   payload: string | Uint8Array,
-  options: { stateId: string; output: "B64" | "Uint8Array" }
+  options: {
+    stateId: string;
+    output: "B64" | "Uint8Array";
+    type: EncDecTypes;
+  }
 ) {
-  const encoder = getEncoderFromPool();
+  const encoder = getEncoderFromPool(options.type);
   const currentState = await cache.takeState(options.stateId);
   if (!currentState) {
     returnEncoderToPool(encoder);
@@ -133,11 +175,13 @@ export async function mkeEncode(
     });
   }
   restoreMteState(encoder, currentState);
-  const nextStateResult = encoder.encodeStr(""); // Note: intentionally left empty for NextEncoderStateGeneration
-  validateStatusIsSuccess(nextStateResult.status, encoder);
-  const nextState = getMteState(encoder);
-  await cache.saveState(options.stateId, nextState);
-  restoreMteState(encoder, currentState);
+  if (options.type === "MKE") {
+    const nextStateResult = encoder.encodeStr(""); // Note: intentionally left empty for NextEncoderStateGeneration
+    validateStatusIsSuccess(nextStateResult.status, encoder);
+    const nextState = getMteState(encoder);
+    await cache.saveState(options.stateId, nextState);
+    restoreMteState(encoder, currentState);
+  }
   let encodeResult: MteArrStatus | MteStrStatus;
   try {
     if (payload instanceof Uint8Array) {
@@ -154,6 +198,10 @@ export async function mkeEncode(
       }
     }
     validateStatusIsSuccess(encodeResult.status, encoder);
+    if (options.type === "MTE") {
+      const state = getMteState(encoder);
+      await cache.saveState(options.stateId, state);
+    }
     returnEncoderToPool(encoder);
   } catch (error) {
     throw new MteRelayError("Failed to encode.", {
@@ -165,9 +213,13 @@ export async function mkeEncode(
 }
 export async function mkeDecode(
   payload: string | Uint8Array,
-  options: { stateId: string; output: "str" | "Uint8Array" }
+  options: {
+    stateId: string;
+    output: "str" | "Uint8Array";
+    type: EncDecTypes;
+  }
 ) {
-  const decoder = getDecoderFromPool();
+  const decoder = getDecoderFromPool(options.type);
   const currentState = await cache.takeState(options.stateId);
   if (!currentState) {
     returnDecoderToPool(decoder);
@@ -217,7 +269,7 @@ function validateStatusIsSuccess(status: MteStatus, mteBase: MteBase) {
     }
   }
 }
-type EncDec = MteMkeEnc | MteMkeDec;
+type EncDec = MteMkeEnc | MteMkeDec | MteEnc | MteDec;
 function restoreMteState(encdec: EncDec, state: string): void {
   const result = encdec.restoreStateB64(state);
   validateStatusIsSuccess(result, encdec);

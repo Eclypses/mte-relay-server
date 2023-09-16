@@ -2,7 +2,7 @@
 
 module.exports = async function () {
   return {
-    level: "debug",
+    level: "info",
     transport: {
       target: "pino-pretty",
       options: {

@@ -15,11 +15,13 @@ const DEFAULT_OPTIONS = {
   SESSION_ID_HEADER: `x-mte-relay-session-id`,
   PAIR_ID_HEADER: `x-mte-relay-pair-id`,
   ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
+  ENCODER_TYPE_HEADER: "x-mte-relay-et",
   PORT: 8080,
   DEBUG: false,
   PERSISTENT_DIR: persistentDir,
   TEMP_DIR_PATH: path.join(persistentDir, "tmp"),
   MAX_FORM_DATA_SIZE: 1024 * 1024 * 20, // 20mb
+  MAX_POOL_SIZE: 25,
 };
 
 // schema for validating settings passed into server
@@ -40,6 +42,7 @@ const settingsSchema = z.object({
   headers: z.object({}).passthrough().optional(),
   mteRoutes: z.array(z.string()).optional(),
   serverId: z.string().optional(),
+  maxPoolSize: z.number().min(1).optional(),
 });
 
 // default function for generating settings
@@ -85,6 +88,7 @@ export default async function () {
     HEADERS: userSettings.headers,
     MTE_ROUTES: userSettings.mteRoutes,
     SERVER_ID: userSettings.serverId || DEFAULT_OPTIONS.SERVER_ID,
+    MAX_POOL_SIZE: userSettings.maxPoolSize || DEFAULT_OPTIONS.MAX_POOL_SIZE,
   };
 
   // SET CORs methods

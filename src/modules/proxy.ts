@@ -27,6 +27,7 @@ function proxyHandler(
     pairIdHeader: string;
     encodedHeadersHeader: string;
     maxFormDataSize: number;
+    encoderTypeHeader: string;
   },
   done: any
 ) {
@@ -44,7 +45,11 @@ function proxyHandler(
       return reply.status(err.status).send(err.message);
     }
     request.log.info(
-      { [options.clientIdHeader]: request.clientId, url: request.url },
+      {
+        [options.clientIdHeader]: request.clientId,
+        url: request.url,
+        encoderType: request.encoderType,
+      },
       `MTE Proxy Route used: ${request.url}`
     );
   });
@@ -104,6 +109,8 @@ function proxyHandler(
       delete proxyHeaders[options.clientIdHeader];
       delete proxyHeaders[options.sessionIdHeader];
       delete proxyHeaders[options.pairIdHeader];
+      delete proxyHeaders[options.encodedHeadersHeader];
+      delete proxyHeaders[options.encoderTypeHeader];
       delete proxyHeaders["content-length"];
       proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
 
@@ -122,6 +129,7 @@ function proxyHandler(
         const decodedHeaders = await mkeDecode(encodedHeaders, {
           stateId: `decoder.${request.clientId}.${request.pairId}`,
           output: "str",
+          type: request.encoderType,
         });
         const headers = JSON.parse(decodedHeaders as string);
         Object.entries(headers).forEach(([key, value]) => {
@@ -174,12 +182,14 @@ function proxyHandler(
           const decodedFieldName = await mkeDecode(_field.fieldname, {
             stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "str",
+            type: request.encoderType,
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
           });
           const decodedFieldValue = await mkeDecode(_field.value, {
             stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "str",
+            type: request.encoderType,
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
           });
@@ -194,6 +204,7 @@ function proxyHandler(
           const decodedFieldName = await mkeDecode(_file.fieldname, {
             stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "str",
+            type: request.encoderType,
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
           });
@@ -201,6 +212,7 @@ function proxyHandler(
           const decodedFileName = await mkeDecode(fieldName, {
             stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "str",
+            type: request.encoderType,
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
           });
@@ -209,6 +221,7 @@ function proxyHandler(
           const decodedFile = await mkeDecode(u8, {
             stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: "Uint8Array",
+            type: request.encoderType,
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
           });
@@ -244,6 +257,7 @@ function proxyHandler(
           decodedPayload = await mkeDecode(request.body as any, {
             stateId: `decoder.${request.clientId}.${request.pairId}`,
             output: contentTypeIsText(contentType) ? "str" : "Uint8Array",
+            type: request.encoderType,
           }).catch((err) => {
             throw new MteRelayError("Failed to decode.", err);
           });
@@ -358,6 +372,7 @@ function proxyHandler(
       const encodedResponseHeaders = await mkeEncode(encodedHeadersJson, {
         stateId: `encoder.${request.clientId}.${request.pairId}`,
         output: "B64",
+        type: request.encoderType,
       }).catch((err) => {
         throw new MteRelayError("Failed to encode.", err);
       });
@@ -378,6 +393,7 @@ function proxyHandler(
       const encodedBody = await mkeEncode(_body, {
         stateId: `encoder.${request.clientId}.${request.pairId}`,
         output: "Uint8Array",
+        type: request.encoderType,
       }).catch((err) => {
         throw new MteRelayError("Failed to encode.", err);
       });
