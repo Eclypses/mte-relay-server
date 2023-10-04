@@ -113,6 +113,7 @@ function proxyHandler(
       delete proxyHeaders[options.encoderTypeHeader];
       delete proxyHeaders["content-length"];
       proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
+      proxyHeaders["cache-control"] = "no-cache";
 
       // set decoded payload to this variable
       let proxyPayload: any = undefined;
@@ -378,14 +379,12 @@ function proxyHandler(
       });
       proxyResponseHeaders[options.encodedHeadersHeader] =
         encodedResponseHeaders as string;
-
-      // copy proxyResponse headers to reply
-      reply.headers(proxyResponseHeaders);
       reply.status(proxyResponse.status);
 
       // if no body, send reply
       const _body = proxyResponse.data;
-      if (!_body) {
+      if (_body.length < 1) {
+        reply.headers(proxyResponseHeaders);
         return reply.send();
       }
 
@@ -398,6 +397,10 @@ function proxyHandler(
         throw new MteRelayError("Failed to encode.", err);
       });
       const _buffer = Buffer.from(encodedBody as Uint8Array);
+      proxyResponseHeaders["content-type"] = "application/octet-stream";
+      proxyResponseHeaders["content-length"] = _buffer.length.toString();
+      reply.headers(proxyResponseHeaders);
+
       reply.send(_buffer);
 
       // delete tmp files if they exist
