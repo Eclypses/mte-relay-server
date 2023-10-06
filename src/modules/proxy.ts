@@ -104,6 +104,16 @@ function proxyHandler(
         }
       }
 
+      // decode route
+      const uriDecodeUrl = decodeURIComponent(request.url.slice(1));
+      const decryptedUrl = await mkeDecode(uriDecodeUrl, {
+        stateId: `decoder.${request.clientId}.${request.pairId}`,
+        output: "str",
+        type: request.encoderType,
+      }).catch((err) => {
+        throw new MteRelayError("Failed to decode.", err);
+      });
+
       // set headers for proxy request
       const proxyHeaders = cloneHeaders(request.headers);
       delete proxyHeaders[options.clientIdHeader];
@@ -273,7 +283,7 @@ function proxyHandler(
       try {
         proxyResponse = await axios({
           method: request.method,
-          url: options.upstream + request.url,
+          url: options.upstream + "/" + decryptedUrl,
           headers: proxyHeaders,
           data: proxyPayload,
           maxRedirects: 0,
