@@ -24,9 +24,7 @@ declare module "fastify" {
 const mteIdManager: FastifyPluginCallback<{
   clientIdSecret: string;
   clientIdHeader: string;
-  sessionIdHeader: string;
   pairIdHeader: string;
-  serverIdHeader: string;
   mteServerId: string;
   encoderTypeHeader: string;
 }> = (fastify, options, done) => {
@@ -43,9 +41,6 @@ const mteIdManager: FastifyPluginCallback<{
         request.encoderType = encoderType as "MKE" | "MTE";
       }
       reply.header(options.encoderTypeHeader, request.encoderType);
-
-      // add x-mte-relay-server-id header to the every response
-      reply.header(options.serverIdHeader, options.mteServerId);
 
       // get x-mte-relay-client-id header from request
       // if it exists, verify it, else set a new ID
@@ -74,9 +69,6 @@ const mteIdManager: FastifyPluginCallback<{
       let pairId = request.headers[options.pairIdHeader] as string;
       if (pairId) {
         reply.header(options.pairIdHeader, pairId);
-      } else {
-        pairId = request.headers[options.sessionIdHeader] as string;
-        reply.header(options.sessionIdHeader, pairId);
       }
       if (pairId) {
         request.pairId = pairId;

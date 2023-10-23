@@ -23,7 +23,6 @@ function proxyHandler(
     tempDirPath: string;
     outboundToken?: string;
     clientIdHeader: string;
-    sessionIdHeader: string;
     pairIdHeader: string;
     encodedHeadersHeader: string;
     maxFormDataSize: number;
@@ -117,7 +116,6 @@ function proxyHandler(
       // set headers for proxy request
       const proxyHeaders = cloneHeaders(request.headers);
       delete proxyHeaders[options.clientIdHeader];
-      delete proxyHeaders[options.sessionIdHeader];
       delete proxyHeaders[options.pairIdHeader];
       delete proxyHeaders[options.encodedHeadersHeader];
       delete proxyHeaders[options.encoderTypeHeader];

@@ -41,9 +41,7 @@ let server: FastifyInstance | null = null;
       methods: SETTINGS.CORS_METHODS,
       credentials: true,
       exposedHeaders: [
-        SETTINGS.SERVER_ID_HEADER,
         SETTINGS.CLIENT_ID_HEADER,
-        SETTINGS.SESSION_ID_HEADER,
         SETTINGS.PAIR_ID_HEADER,
         SETTINGS.ENCODED_HEADERS_HEADER,
         SETTINGS.ENCODER_TYPE_HEADER,
@@ -59,9 +57,7 @@ let server: FastifyInstance | null = null;
     await server.register(mteIdManager, {
       clientIdSecret: SETTINGS.CLIENT_ID_SECRET,
       clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
-      sessionIdHeader: SETTINGS.SESSION_ID_HEADER,
       pairIdHeader: SETTINGS.PAIR_ID_HEADER,
-      serverIdHeader: SETTINGS.SERVER_ID_HEADER,
       mteServerId: SETTINGS.SERVER_ID,
       encoderTypeHeader: SETTINGS.ENCODER_TYPE_HEADER,
     });
@@ -87,7 +83,6 @@ let server: FastifyInstance | null = null;
       tempDirPath: SETTINGS.TEMP_DIR_PATH,
       clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
       maxFormDataSize: SETTINGS.MAX_FORM_DATA_SIZE,
-      sessionIdHeader: SETTINGS.SESSION_ID_HEADER,
       pairIdHeader: SETTINGS.PAIR_ID_HEADER,
       encodedHeadersHeader: SETTINGS.ENCODED_HEADERS_HEADER,
       routes: SETTINGS.MTE_ROUTES,

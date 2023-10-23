@@ -10,12 +10,10 @@ const persistentDir = path.join(process.cwd(), "data");
 // default settings
 const DEFAULT_OPTIONS = {
   SERVER_ID: crypto.randomUUID(),
-  SERVER_ID_HEADER: `x-mte-relay-server-id`,
-  CLIENT_ID_HEADER: `x-mte-relay-client-id`,
-  SESSION_ID_HEADER: `x-mte-relay-session-id`,
-  PAIR_ID_HEADER: `x-mte-relay-pair-id`,
-  ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
-  ENCODER_TYPE_HEADER: "x-mte-relay-et",
+  CLIENT_ID_HEADER: `x-mte-r-cid`,
+  PAIR_ID_HEADER: `x-mte-r-pid`,
+  ENCODED_HEADERS_HEADER: `x-mte-r-eh`,
+  ENCODER_TYPE_HEADER: "x-mte-r",
   PORT: 8080,
   DEBUG: false,
   PERSISTENT_DIR: persistentDir,

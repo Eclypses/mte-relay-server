@@ -11,3 +11,4 @@ package-lock.json
 data/
 settings.js
 .env
+pnpm-lock.yaml
