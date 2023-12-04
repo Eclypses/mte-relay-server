@@ -1,12 +1,5 @@
-import {
-  FastifyRequest,
-  FastifyInstance,
-  FastifyReply,
-  HTTPMethods,
-} from "fastify";
+import { FastifyRequest, FastifyInstance, FastifyReply, HTTPMethods } from "fastify";
 import { mkeDecode, mkeEncode } from "./mte";
-import multipart from "@fastify/multipart";
-import FormData from "form-data";
 import axios, { AxiosResponse } from "axios";
 import fs from "fs";
 import path from "path";
@@ -37,9 +30,7 @@ function proxyHandler(
       return reply.status(401).send("Unauthorized");
     }
     if (!request.pairId) {
-      const err = new MteRelayError(
-        "PairID Header (or sessionID) is required, but not found."
-      );
+      const err = new MteRelayError("PairID Header (or sessionID) is required, but not found.");
       request.log.error(err.message);
       return reply.status(err.status).send(err.message);
     }
@@ -51,13 +42,6 @@ function proxyHandler(
       },
       `MTE Proxy Route used: ${request.url}`
     );
-  });
-
-  // parse multipart/form-data requests
-  fastify.register(multipart, {
-    limits: {
-      fileSize: options.maxFormDataSize,
-    },
   });
 
   // if not multipart/form-data, put entire buffer on request.body, and handle decode in handler
@@ -74,9 +58,7 @@ function proxyHandler(
 
   // remove OPTIONS from httpMethods, they are not needed for server-to-server proxy
   const disallowedMethods = ["OPTIONS", "HEAD"];
-  const methods = options.httpMethods.filter(
-    (method) => !disallowedMethods.includes(method)
-  );
+  const methods = options.httpMethods.filter((method) => !disallowedMethods.includes(method));
 
   // support white-listed MTE routes, or default all routes to MTE proxy
   if (options.routes) {
@@ -131,9 +113,7 @@ function proxyHandler(
 
       // decoded headers
       let mkeDecodedHeaders: Record<string, string> = {};
-      const encodedHeaders = request.headers[
-        options.encodedHeadersHeader
-      ] as string;
+      const encodedHeaders = request.headers[options.encodedHeadersHeader] as string;
       if (encodedHeaders) {
         const decodedHeaders = await mkeDecode(encodedHeaders, {
           stateId: `decoder.${request.clientId}.${request.pairId}`,
@@ -149,118 +129,11 @@ function proxyHandler(
       }
 
       /**
-       * Handle multipart/form-data requests
-       */
-      const contentType = request.headers["content-type"];
-      const isMultipart = !!contentType && contentType.includes("multipart");
-      if (Boolean(contentType) && isMultipart) {
-        const decodedFormData = new FormData();
-        // stores files to tmp dir and return files
-        const formData = await request.file();
-
-        if (!formData) {
-          return reply.status(400).send("No files were uploaded.");
-        }
-
-        // separate fields and files into their own arrays
-        let fields: {
-          fieldname: string;
-          mimetype: string;
-          value: string;
-        }[] = [];
-        let files: {
-          fieldname: string;
-          filename: string;
-          mimetype: string;
-          file: ReadableStream;
-          toBuffer: () => Promise<Buffer>;
-        }[] = [];
-        Object.entries(formData.fields).forEach((field: any) => {
-          if (field[1].mimetype === "application/octet-stream") {
-            files.push(field[1]);
-          } else {
-            fields.push(field[1]);
-          }
-        });
-
-        // decode text fields first
-        let i = 0;
-        const iMax = fields.length;
-        for (; i < iMax; ++i) {
-          const _field = fields[i];
-          const decodedFieldName = await mkeDecode(_field.fieldname, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: "str",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-          const decodedFieldValue = await mkeDecode(_field.value, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: "str",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-          decodedFormData.append(decodedFieldName as string, decodedFieldValue);
-        }
-
-        // decode file fields second
-        let ii = 0;
-        const iiMax = files.length;
-        for (; ii < iiMax; ii++) {
-          const _file = files[ii];
-          const decodedFieldName = await mkeDecode(_file.fieldname, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: "str",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-          const fieldName = decodeURIComponent(_file.filename);
-          const decodedFileName = await mkeDecode(fieldName, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: "str",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-          const buffer = await _file.toBuffer();
-          const u8 = new Uint8Array(buffer);
-          const decodedFile = await mkeDecode(u8, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: "Uint8Array",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-          // write decoded file to tmp dir
-          const id = Math.floor(Math.random() * 1e15);
-          const tmpPath = path.join(options.tempDirPath, `${id}.tmp`);
-          tmpFilesToDelete.push(tmpPath);
-          await fs.promises.writeFile(tmpPath, decodedFile as Uint8Array);
-          const stream = fs.createReadStream(tmpPath);
-          decodedFormData.append(decodedFieldName as string, stream, {
-            filename: decodedFileName as string,
-          });
-        }
-
-        // manage headers
-        proxyHeaders[
-          "content-type"
-        ] = `multipart/form-data; boundary=${decodedFormData.getBoundary()}`;
-
-        // set decoded payload to proxyPayload
-        proxyPayload = decodedFormData;
-      }
-
-      /**
        * Handle NON-multipart/form-data requests
        */
-      if (Boolean(request.body) && !isMultipart) {
+      if (Boolean(request.body)) {
         // decode incoming payload
-        const contentType =
-          request.headers["content-type"] || "application/json";
+        const contentType = request.headers["content-type"] || "application/json";
         let decodedPayload: any = request.body;
         if (request.body) {
           decodedPayload = await mkeDecode(request.body as any, {
@@ -286,8 +159,8 @@ function proxyHandler(
           data: proxyPayload,
           maxRedirects: 0,
           responseType: "arraybuffer",
-          validateStatus: (status) => status < 400,
-          transformResponse: (data, _headers) => data,
+          validateStatus: (status: number) => status < 400,
+          transformResponse: (data: any, _headers: any) => data,
         });
       } catch (error: any) {
         request.log.error(error);
@@ -312,9 +185,7 @@ function proxyHandler(
         return reply.status(500).send("No Response.");
       }
 
-      request.log.debug(
-        `Proxy Response Headers - Original:\n${proxyResponse.headers}`
-      );
+      request.log.debug(`Proxy Response Headers - Original:\n${proxyResponse.headers}`);
 
       // create response headers
       proxyResponse.headers["access-control-allow-credentials"] = "true";
@@ -332,8 +203,7 @@ function proxyHandler(
         if (replyHeader) {
           value.push(makeHeaderAString(replyHeader));
         }
-        const proxyResponseHeader =
-          proxyResponse.headers["access-control-allow-headers"];
+        const proxyResponseHeader = proxyResponse.headers["access-control-allow-headers"];
         if (proxyResponseHeader) {
           value.push(makeHeaderAString(proxyResponseHeader));
         }
@@ -345,8 +215,7 @@ function proxyHandler(
         if (replyHeader) {
           value.push(makeHeaderAString(replyHeader));
         }
-        const proxyResponseHeader =
-          proxyResponse.headers["access-control-expose-headers"];
+        const proxyResponseHeader = proxyResponse.headers["access-control-expose-headers"];
         if (proxyResponseHeader) {
           value.push(makeHeaderAString(proxyResponseHeader));
         }
@@ -364,10 +233,7 @@ function proxyHandler(
         ] as unknown as string;
       }
 
-      request.log.debug(
-        `Proxy Response Headers - Modified:\n${proxyResponse.headers}`
-      );
-
+      request.log.debug(`Proxy Response Headers - Modified:\n${proxyResponse.headers}`);
       // encode headers
       const headersToEncode: Record<string, string> = {};
       const contentTypeHeader = proxyResponse.headers["content-type"];
@@ -385,8 +251,10 @@ function proxyHandler(
       }).catch((err) => {
         throw new MteRelayError("Failed to encode.", err);
       });
-      proxyResponseHeaders[options.encodedHeadersHeader] =
-        encodedResponseHeaders as string;
+      proxyResponseHeaders[options.encodedHeadersHeader] = encodedResponseHeaders as string;
+
+      // copy proxyResponse headers to reply
+      reply.headers(proxyResponseHeaders);
       reply.status(proxyResponse.status);
 
       // if no body, send reply
