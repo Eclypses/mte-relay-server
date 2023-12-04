@@ -82,7 +82,6 @@ let server: FastifyInstance | null = null;
       httpMethods: SETTINGS.CORS_METHODS,
       tempDirPath: SETTINGS.TEMP_DIR_PATH,
       clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
-      maxFormDataSize: SETTINGS.MAX_FORM_DATA_SIZE,
       pairIdHeader: SETTINGS.PAIR_ID_HEADER,
       encodedHeadersHeader: SETTINGS.ENCODED_HEADERS_HEADER,
       routes: SETTINGS.MTE_ROUTES,

@@ -10,15 +10,14 @@ const persistentDir = path.join(process.cwd(), "data");
 // default settings
 const DEFAULT_OPTIONS = {
   SERVER_ID: crypto.randomUUID(),
-  CLIENT_ID_HEADER: `x-mte-r-cid`,
-  PAIR_ID_HEADER: `x-mte-r-pid`,
-  ENCODED_HEADERS_HEADER: `x-mte-r-eh`,
-  ENCODER_TYPE_HEADER: "x-mte-r",
+  CLIENT_ID_HEADER: `x-mte-relay-client-id`,
+  PAIR_ID_HEADER: `x-mte-relay-pair-id`,
+  ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
+  ENCODER_TYPE_HEADER: "x-mte-relay-et",
   PORT: 8080,
   DEBUG: false,
   PERSISTENT_DIR: persistentDir,
   TEMP_DIR_PATH: path.join(persistentDir, "tmp"),
-  MAX_FORM_DATA_SIZE: 1024 * 1024 * 20, // 20mb
   MAX_POOL_SIZE: 25,
 };
 
@@ -28,9 +27,7 @@ const settingsSchema = z.object({
   licenseCompany: z.string(),
   licenseKey: z.string(),
   clientIdSecret: z.string(),
-  corsOrigins: z.array(
-    z.string().url({ message: "corsOrigin must be a valid URL." })
-  ),
+  corsOrigins: z.array(z.string().url({ message: "corsOrigin must be a valid URL." })),
   port: z.number().optional(),
   debug: z.boolean().optional(),
   passThroughRoutes: z.array(z.string()).optional(),
@@ -81,8 +78,6 @@ export default async function () {
     DEBUG: userSettings.debug || DEFAULT_OPTIONS.DEBUG,
     OUTBOUND_PROXY_BEARER_TOKEN: userSettings.outboundProxyBearerToken,
     PASS_THROUGH_ROUTES: userSettings.passThroughRoutes || [],
-    MAX_FORM_DATA_SIZE:
-      userSettings.maxFormDataSize || DEFAULT_OPTIONS.MAX_FORM_DATA_SIZE,
     HEADERS: userSettings.headers,
     MTE_ROUTES: userSettings.mteRoutes,
     SERVER_ID: userSettings.serverId || DEFAULT_OPTIONS.SERVER_ID,

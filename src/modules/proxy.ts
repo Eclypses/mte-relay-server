@@ -2,7 +2,6 @@ import { FastifyRequest, FastifyInstance, FastifyReply, HTTPMethods } from "fast
 import { mkeDecode, mkeEncode } from "./mte";
 import axios, { AxiosResponse } from "axios";
 import fs from "fs";
-import path from "path";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
 import { MteRelayError } from "./mte/errors";
@@ -18,7 +17,6 @@ function proxyHandler(
     clientIdHeader: string;
     pairIdHeader: string;
     encodedHeadersHeader: string;
-    maxFormDataSize: number;
     encoderTypeHeader: string;
   },
   done: any
