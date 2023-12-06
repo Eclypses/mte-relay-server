@@ -7,7 +7,7 @@ export const MTE_ERRORS = {
   "DRBG reseed is required.": 564,
   "MTE Status was not successful.": 565,
   "Invalid Client ID header.": 566,
-  "PairID Header (or sessionID) is required, but not found.": 567,
+  "PairID is required, but not found.": 567,
 } as const;
 
 const statusCodes: Set<number> = new Set(Object.values(MTE_ERRORS));

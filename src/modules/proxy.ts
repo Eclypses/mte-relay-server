@@ -5,6 +5,7 @@ import fs from "fs";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
 import { MteRelayError } from "./mte/errors";
+import { formatMteRelayHeader } from "../utils/mte-relay-header";
 
 function proxyHandler(
   fastify: FastifyInstance,
@@ -14,32 +15,32 @@ function proxyHandler(
     routes?: string[];
     tempDirPath: string;
     outboundToken?: string;
-    clientIdHeader: string;
-    pairIdHeader: string;
+    mteRelayHeader: string;
     encodedHeadersHeader: string;
-    encoderTypeHeader: string;
   },
   done: any
 ) {
   // log mte usage
   fastify.addHook("onRequest", async (request, reply) => {
     if (!request.clientId) {
-      request.log.error(`Missing ${options.clientIdHeader} header.`);
+      request.log.error(`Missing clientID header.`);
       return reply.status(401).send("Unauthorized");
     }
     if (!request.pairId) {
-      const err = new MteRelayError("PairID Header (or sessionID) is required, but not found.");
+      const err = new MteRelayError("PairID is required, but not found.");
       request.log.error(err.message);
       return reply.status(err.status).send(err.message);
     }
     request.log.info(
       {
-        [options.clientIdHeader]: request.clientId,
+        ClientId: request.clientId,
         url: request.url,
         encoderType: request.encoderType,
       },
       `MTE Proxy Route used: ${request.url}`
     );
+    const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
+    reply.header(options.mteRelayHeader, mteRelayHeader);
   });
 
   // if not multipart/form-data, put entire buffer on request.body, and handle decode in handler
@@ -95,10 +96,8 @@ function proxyHandler(
 
       // set headers for proxy request
       const proxyHeaders = cloneHeaders(request.headers);
-      delete proxyHeaders[options.clientIdHeader];
-      delete proxyHeaders[options.pairIdHeader];
       delete proxyHeaders[options.encodedHeadersHeader];
-      delete proxyHeaders[options.encoderTypeHeader];
+      delete proxyHeaders[options.mteRelayHeader];
       delete proxyHeaders["content-length"];
       proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
       proxyHeaders["cache-control"] = "no-cache";

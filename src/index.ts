@@ -40,12 +40,7 @@ let server: FastifyInstance | null = null;
       origin: SETTINGS.CORS_ORIGINS,
       methods: SETTINGS.CORS_METHODS,
       credentials: true,
-      exposedHeaders: [
-        SETTINGS.CLIENT_ID_HEADER,
-        SETTINGS.PAIR_ID_HEADER,
-        SETTINGS.ENCODED_HEADERS_HEADER,
-        SETTINGS.ENCODER_TYPE_HEADER,
-      ],
+      exposedHeaders: [SETTINGS.ENCODED_HEADERS_HEADER, SETTINGS.MTE_RELAY_HEADER],
     });
 
     // register custom headers, if they exist
@@ -56,18 +51,17 @@ let server: FastifyInstance | null = null;
     // Register MTE ID manager module
     await server.register(mteIdManager, {
       clientIdSecret: SETTINGS.CLIENT_ID_SECRET,
-      clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
-      pairIdHeader: SETTINGS.PAIR_ID_HEADER,
-      mteServerId: SETTINGS.SERVER_ID,
-      encoderTypeHeader: SETTINGS.ENCODER_TYPE_HEADER,
+      mteRelayHeader: SETTINGS.MTE_RELAY_HEADER,
     });
 
     // register anonymous API routes
-    await server.register(anonymousApiRoutes);
+    await server.register(anonymousApiRoutes, {
+      mteRelayHeader: SETTINGS.MTE_RELAY_HEADER,
+    });
 
     // register protected API routes
     await server.register(protectedApiRoutes, {
-      clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
+      mteRelayHeader: SETTINGS.MTE_RELAY_HEADER,
     });
 
     // register pass-through routes
@@ -81,11 +75,9 @@ let server: FastifyInstance | null = null;
       upstream: SETTINGS.UPSTREAM,
       httpMethods: SETTINGS.CORS_METHODS,
       tempDirPath: SETTINGS.TEMP_DIR_PATH,
-      clientIdHeader: SETTINGS.CLIENT_ID_HEADER,
-      pairIdHeader: SETTINGS.PAIR_ID_HEADER,
       encodedHeadersHeader: SETTINGS.ENCODED_HEADERS_HEADER,
       routes: SETTINGS.MTE_ROUTES,
-      encoderTypeHeader: SETTINGS.ENCODER_TYPE_HEADER,
+      mteRelayHeader: SETTINGS.MTE_RELAY_HEADER,
     });
 
     await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });

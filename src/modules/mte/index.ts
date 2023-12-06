@@ -54,7 +54,6 @@ function getEncoderFromPool(type: EncDecTypes) {
 }
 function getDecoderFromPool(type: EncDecTypes) {
   if (type === "MTE") {
-    console.log(`getDecoderFromPool: ${type}`);
     const decoder = mteDecoderPool.pop();
     if (!decoder) {
       return MteDec.fromdefault(mteWasm, 1000, -63);
@@ -110,10 +109,7 @@ export async function instantiateMteWasm(options: {
   mteWasm = new MteWasm();
   await mteWasm.instantiate();
   const mteBase = new MteBase(mteWasm);
-  const initResult = mteBase.initLicense(
-    options.companyName,
-    options.licenseKey
-  );
+  const initResult = mteBase.initLicense(options.companyName, options.licenseKey);
   if (!initResult) {
     const licenseStatus = MteStatus.mte_status_license_error;
     const status = mteBase.getStatusName(licenseStatus);
@@ -283,9 +279,7 @@ function getMteState(encoder: EncDec) {
 }
 function drbgReseedCheck(encoder: EncDec) {
   const drbg = encoder.getDrbg();
-  const threshhold = Number(
-    String(encoder.getDrbgsReseedInterval(drbg)).substring(0, 15)
-  );
+  const threshhold = Number(String(encoder.getDrbgsReseedInterval(drbg)).substring(0, 15));
   const counter = Number(String(encoder.getReseedCounter()).substring(0, 15));
   const reseedIsRequired = counter / threshhold > 0.9;
   if (reseedIsRequired) {

@@ -1,7 +1,6 @@
 import yaml from "yaml";
 import fs from "fs";
 import path from "path";
-import crypto from "crypto";
 import { z } from "zod";
 
 // where to store sqlite3 db, and tmp/
@@ -9,11 +8,8 @@ const persistentDir = path.join(process.cwd(), "data");
 
 // default settings
 const DEFAULT_OPTIONS = {
-  SERVER_ID: crypto.randomUUID(),
-  CLIENT_ID_HEADER: `x-mte-relay-client-id`,
-  PAIR_ID_HEADER: `x-mte-relay-pair-id`,
   ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
-  ENCODER_TYPE_HEADER: "x-mte-relay-et",
+  MTE_RELAY_HEADER: "x-mte-relay",
   PORT: 8080,
   DEBUG: false,
   PERSISTENT_DIR: persistentDir,
@@ -36,7 +32,6 @@ const settingsSchema = z.object({
   maxFormDataSize: z.number().optional(),
   headers: z.object({}).passthrough().optional(),
   mteRoutes: z.array(z.string()).optional(),
-  serverId: z.string().optional(),
   maxPoolSize: z.number().min(1).optional(),
 });
 
@@ -80,7 +75,6 @@ export default async function () {
     PASS_THROUGH_ROUTES: userSettings.passThroughRoutes || [],
     HEADERS: userSettings.headers,
     MTE_ROUTES: userSettings.mteRoutes,
-    SERVER_ID: userSettings.serverId || DEFAULT_OPTIONS.SERVER_ID,
     MAX_POOL_SIZE: userSettings.maxPoolSize || DEFAULT_OPTIONS.MAX_POOL_SIZE,
   };
 

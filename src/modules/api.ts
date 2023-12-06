@@ -5,47 +5,39 @@ import { instantiateEncoder, instantiateDecoder } from "./mte";
 import { getNonce } from "../utils/nonce";
 import { MTE_ERRORS, MteRelayError } from "./mte/errors";
 
-/**
- * Protect API Routes that require x-mte-id header
- */
-export const protectedApiRoutes: FastifyPluginCallback<{
-  clientIdHeader: string;
-}> = (fastify, options, done) => {
-  // on every request
-  fastify.addHook("onRequest", (request, reply, done) => {
-    if (!request.clientId) {
-      request.log.error(`Missing ${options.clientIdHeader} header.`);
-      return reply.code(400).send(`Missing ${options.clientIdHeader} header.`);
-    }
-    done();
-  });
-
-  // mte pair route
-  const mtePairSchema = z.object({
+const mtePairSchema = z.object({
+  encoderPublicKey: z.string(),
+  encoderPersonalizationStr: z.string(),
+  decoderPublicKey: z.string(),
+  decoderPersonalizationStr: z.string(),
+});
+const mtePairArraySchema = z.array(
+  z.object({
+    pairId: z.string(),
     encoderPublicKey: z.string(),
     encoderPersonalizationStr: z.string(),
     decoderPublicKey: z.string(),
     decoderPersonalizationStr: z.string(),
-  });
-  const mtePairArraySchema = z.array(
-    z.object({
-      pairId: z.string(),
-      encoderPublicKey: z.string(),
-      encoderPersonalizationStr: z.string(),
-      decoderPublicKey: z.string(),
-      decoderPersonalizationStr: z.string(),
-    })
-  );
-  const bodySchema = z.union([mtePairSchema, mtePairArraySchema]);
+  })
+);
+const bodySchema = z.union([mtePairSchema, mtePairArraySchema]);
+
+/**
+ * Protect API Routes that require x-mte-id header
+ */
+export const protectedApiRoutes: FastifyPluginCallback<{
+  mteRelayHeader: string;
+}> = (fastify, options, done) => {
+  // mte pair route
   fastify.post("/api/mte-pair", async (request, reply) => {
     try {
+      reply.header(options.mteRelayHeader, request.clientIdSigned);
+
       // validate request body
       const validationResult = bodySchema.safeParse(request.body);
       if (!validationResult.success) {
         request.log.error(validationResult.error);
-        return reply
-          .status(400)
-          .send(JSON.stringify(validationResult.error, null, 2));
+        return reply.status(400).send(JSON.stringify(validationResult.error, null, 2));
       }
 
       if (Array.isArray(validationResult.data)) {
@@ -55,9 +47,7 @@ export const protectedApiRoutes: FastifyPluginCallback<{
           // create encoder
           const encoderNonce = getNonce();
           const encoderEcdh = getEcdh();
-          const encoderEntropy = encoderEcdh.computeSharedSecret(
-            pair.decoderPublicKey
-          );
+          const encoderEntropy = encoderEcdh.computeSharedSecret(pair.decoderPublicKey);
           instantiateEncoder({
             id: `encoder.${request.clientId}.${pair.pairId}`,
             entropy: encoderEntropy,
@@ -68,9 +58,7 @@ export const protectedApiRoutes: FastifyPluginCallback<{
           // create decoder
           const decoderNonce = getNonce();
           const decoderEcdh = getEcdh();
-          const decoderEntropy = decoderEcdh.computeSharedSecret(
-            pair.encoderPublicKey
-          );
+          const decoderEntropy = decoderEcdh.computeSharedSecret(pair.encoderPublicKey);
           instantiateDecoder({
             id: `decoder.${request.clientId}.${pair.pairId}`,
             entropy: decoderEntropy,
@@ -146,11 +134,9 @@ export const protectedApiRoutes: FastifyPluginCallback<{
 /**
  * Public API Routes
  */
-export const anonymousApiRoutes: FastifyPluginCallback<{}> = (
-  fastify,
-  _options,
-  done
-) => {
+export const anonymousApiRoutes: FastifyPluginCallback<{
+  mteRelayHeader: string;
+}> = (fastify, options, done) => {
   // echo endpoint
   fastify.get("/api/mte-echo/:msg?", (request, reply) => {
     reply.send({
@@ -165,7 +151,8 @@ export const anonymousApiRoutes: FastifyPluginCallback<{}> = (
   });
 
   // HEAD /api/mte-relay
-  fastify.head("/api/mte-relay", (_request, reply) => {
+  fastify.head("/api/mte-relay", (request, reply) => {
+    reply.header(options.mteRelayHeader, request.clientIdSigned);
     reply.status(200).send();
   });
 
