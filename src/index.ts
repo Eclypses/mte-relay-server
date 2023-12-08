@@ -28,6 +28,12 @@ let server: FastifyInstance | null = null;
       genReqId: () => crypto.randomUUID(),
     });
 
+    // register public dir
+    server.register(require("@fastify/static"), {
+      root: SETTINGS.PUBLIC_DIR,
+      prefix: "/static/",
+    });
+
     // Register MTE init module
     await server.register(mteInit, {
       licenseCompany: SETTINGS.LICENSE_COMPANY,
