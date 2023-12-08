@@ -7,6 +7,9 @@ import { z } from "zod";
 // where to store sqlite3 db, and tmp/
 const persistentDir = path.join(process.cwd(), "data");
 
+// public dir for static assets
+const publicDir = path.join(process.cwd(), "public");
+
 // default settings
 const DEFAULT_OPTIONS = {
   SERVER_ID: crypto.randomUUID(),
@@ -19,6 +22,7 @@ const DEFAULT_OPTIONS = {
   PORT: 8080,
   DEBUG: false,
   PERSISTENT_DIR: persistentDir,
+  PUBLIC_DIR: publicDir,
   TEMP_DIR_PATH: path.join(persistentDir, "tmp"),
   MAX_FORM_DATA_SIZE: 1024 * 1024 * 20, // 20mb
   MAX_POOL_SIZE: 25,
@@ -30,9 +34,7 @@ const settingsSchema = z.object({
   licenseCompany: z.string(),
   licenseKey: z.string(),
   clientIdSecret: z.string(),
-  corsOrigins: z.array(
-    z.string().url({ message: "corsOrigin must be a valid URL." })
-  ),
+  corsOrigins: z.array(z.string().url({ message: "corsOrigin must be a valid URL." })),
   port: z.number().optional(),
   debug: z.boolean().optional(),
   passThroughRoutes: z.array(z.string()).optional(),
@@ -83,8 +85,7 @@ export default async function () {
     DEBUG: userSettings.debug || DEFAULT_OPTIONS.DEBUG,
     OUTBOUND_PROXY_BEARER_TOKEN: userSettings.outboundProxyBearerToken,
     PASS_THROUGH_ROUTES: userSettings.passThroughRoutes || [],
-    MAX_FORM_DATA_SIZE:
-      userSettings.maxFormDataSize || DEFAULT_OPTIONS.MAX_FORM_DATA_SIZE,
+    MAX_FORM_DATA_SIZE: userSettings.maxFormDataSize || DEFAULT_OPTIONS.MAX_FORM_DATA_SIZE,
     HEADERS: userSettings.headers,
     MTE_ROUTES: userSettings.mteRoutes,
     SERVER_ID: userSettings.serverId || DEFAULT_OPTIONS.SERVER_ID,
