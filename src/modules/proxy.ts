@@ -5,7 +5,6 @@ import fs from "fs";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
 import { MteRelayError } from "./mte/errors";
-import { formatMteRelayHeader } from "../utils/mte-relay-header";
 
 function proxyHandler(
   fastify: FastifyInstance,
