@@ -31,7 +31,7 @@ let server: FastifyInstance | null = null;
     // register public dir
     server.register(require("@fastify/static"), {
       root: SETTINGS.PUBLIC_DIR,
-      prefix: "/static/",
+      prefix: "/public/",
     });
 
     // Register MTE init module
