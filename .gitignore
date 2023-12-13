@@ -8,6 +8,7 @@ Dockerfile
 dist/
 docker-compose.yml
 package-lock.json
+pnpm-lock.yaml
 data/
 settings.js
 .env
