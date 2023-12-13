@@ -12,4 +12,20 @@ export async function startupChecks() {
   if (!fs.existsSync(SETTINGS.TEMP_DIR_PATH)) {
     fs.mkdirSync(SETTINGS.TEMP_DIR_PATH);
   }
+
+  // run startup scripts, if they exist
+  const flagIndex = process.argv.indexOf("--startup-script");
+  if (flagIndex > -1) {
+    // Get the file path after the flag
+    const filePath = process.argv[flagIndex + 1];
+    try {
+      // Dynamically import the module
+      const startupScript = await import(filePath);
+      await startupScript.default();
+    } catch (error) {
+      console.log(`Failed to run startup script: ${filePath}`);
+      console.log(error);
+      process.exit(1);
+    }
+  }
 }
