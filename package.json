@@ -1,6 +1,6 @@
 {
   "name": "mte-relay-server",
-  "version": "3.2.1",
+  "version": "3.3.0",
   "description": "",
   "scripts": {
     "dev": "nodemon --watch src src/index.ts -- --log-adapter ../../examples/log-adapters/stdout.js",
@@ -35,6 +35,7 @@
   "devDependencies": {
     "@autotelic/pino-seq-transport": "^0.1.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.405.0",
+    "@aws-sdk/client-marketplace-metering": "^3.470.0",
     "@serdnam/pino-cloudwatch-transport": "^1.0.4",
     "dotenv": "^16.3.1",
     "esbuild": "0.17.11",
