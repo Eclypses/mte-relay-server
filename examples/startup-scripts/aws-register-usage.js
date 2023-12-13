@@ -1,21 +1,24 @@
+/**
+ * Integrate with AWS Marketplace Metering Service
+ *   - https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/marketplace-metering/
+ *   - https://docs.aws.amazon.com/AWSJavaScriptSDK/v3/latest/client/marketplace-metering/command/RegisterUsageCommand/
+ *
+ * npm i @aws-sdk/client-marketplace-metering
+ */
+
 const {
   MarketplaceMeteringClient,
   RegisterUsageCommand,
-} = require("@aws-sdk/client-marketplace-metering"); // CommonJS import
+} = require("@aws-sdk/client-marketplace-metering");
 
-const client = new MarketplaceMeteringClient(config);
+module.exports = async function () {
+  const config = {};
+  const client = new MarketplaceMeteringClient(config);
 
-const input = {
-  // RegisterUsageRequest
-  ProductCode: "STRING_VALUE", // required
-  PublicKeyVersion: Number("int"), // required
-  Nonce: "STRING_VALUE",
+  const command = new RegisterUsageCommand({
+    ProductCode: "STRING_VALUE", // required
+    PublicKeyVersion: Number("int"), // required
+  });
+
+  await client.send(command);
 };
-
-const command = new RegisterUsageCommand(input);
-const response = await client.send(command);
-
-// { // RegisterUsageResult
-//   PublicKeyRotationTimestamp: new Date("TIMESTAMP"),
-//   Signature: "STRING_VALUE",
-// };

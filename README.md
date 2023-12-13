@@ -199,6 +199,14 @@ Then, you need to use a CLI flag to point to that log adapter file when starting
 
 See examples in the [examples/log-adapters](examples/log-adapters) directory.
 
+### Startup Scripts
+
+If you need to run some logic on server start up, you may do so by passing the `--startup-script <path_to/file.js>` flag to the start command. The file should export a function that returns a promise that resolves when you're done with your custom startup logic.
+
+`npm run start -- --startup-script /path_to/startup.js`
+
+See examples in the [examples/startup-scripts](examples/startup-scripts) directory.
+
 ### Local Development
 
 - Follow the quick start guide to configure requires files and install dependencies.

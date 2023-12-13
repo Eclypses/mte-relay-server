@@ -13,7 +13,7 @@ export async function startupChecks() {
     fs.mkdirSync(SETTINGS.TEMP_DIR_PATH);
   }
 
-  // run startup scripts, if they exist
+  // run startup script, if it they exist
   const flagIndex = process.argv.indexOf("--startup-script");
   if (flagIndex > -1) {
     // Get the file path after the flag
