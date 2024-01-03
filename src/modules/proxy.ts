@@ -146,17 +146,12 @@ function proxyHandler(
       }
 
       // make new request
-      let proxyResponse: void | AxiosResponse<any, any> = void 0;
+      let proxyResponse: void | Response = void 0;
       try {
-        proxyResponse = await axios({
+        proxyResponse = await fetch(options.upstream + "/" + decryptedUrl, {
           method: request.method,
-          url: options.upstream + "/" + decryptedUrl,
           headers: proxyHeaders,
-          data: proxyPayload,
-          maxRedirects: 0,
-          responseType: "arraybuffer",
-          validateStatus: (status: number) => status < 400,
-          transformResponse: (data: any, _headers: any) => data,
+          body: proxyPayload,
         });
       } catch (error: any) {
         request.log.error(error);
@@ -184,10 +179,10 @@ function proxyHandler(
       request.log.debug(`Proxy Response Headers - Original:\n${proxyResponse.headers}`);
 
       // create response headers
-      proxyResponse.headers["access-control-allow-credentials"] = "true";
-      proxyResponse.headers["access-control-allow-methods"] = reply.getHeader(
-        "access-control-allow-methods"
-      );
+      const methods = proxyResponse.headers.get("access-control-allow-methods");
+      if (methods) {
+        proxyResponse.headers.set("access-control-allow-methods", methods);
+      }
 
       // @ts-ignore
       const proxyResponseHeaders = cloneHeaders(proxyResponse.headers);
@@ -199,7 +194,7 @@ function proxyHandler(
         if (replyHeader) {
           value.push(makeHeaderAString(replyHeader));
         }
-        const proxyResponseHeader = proxyResponse.headers["access-control-allow-headers"];
+        const proxyResponseHeader = proxyResponse.headers.get("access-control-allow-headers");
         if (proxyResponseHeader) {
           value.push(makeHeaderAString(proxyResponseHeader));
         }
@@ -211,7 +206,7 @@ function proxyHandler(
         if (replyHeader) {
           value.push(makeHeaderAString(replyHeader));
         }
-        const proxyResponseHeader = proxyResponse.headers["access-control-expose-headers"];
+        const proxyResponseHeader = proxyResponse.headers.get("access-control-expose-headers");
         if (proxyResponseHeader) {
           value.push(makeHeaderAString(proxyResponseHeader));
         }
@@ -222,17 +217,16 @@ function proxyHandler(
       delete proxyResponseHeaders["access-control-allow-origin"];
       proxyResponseHeaders[options.encodedHeadersHeader];
 
-      // cookies are a special case, just copy them over from the original request headers object
-      if (proxyResponse.headers["set-cookie"]) {
-        proxyResponseHeaders["set-cookie"] = proxyResponse.headers[
-          "set-cookie"
-        ] as unknown as string;
+      // copy cookies
+      const setCookie = proxyResponse.headers.get("set-cookie");
+      if (setCookie) {
+        proxyResponseHeaders["set-cookie"] = setCookie;
       }
 
       request.log.debug(`Proxy Response Headers - Modified:\n${proxyResponse.headers}`);
       // encode headers
       const headersToEncode: Record<string, string> = {};
-      const contentTypeHeader = proxyResponse.headers["content-type"];
+      const contentTypeHeader = proxyResponse.headers.get("content-type");
       if (contentTypeHeader) {
         headersToEncode["content-type"] = contentTypeHeader;
       }
@@ -254,14 +248,14 @@ function proxyHandler(
       reply.status(proxyResponse.status);
 
       // if no body, send reply
-      const _body = proxyResponse.data;
-      if (_body.length < 1) {
+      const _body = await proxyResponse.arrayBuffer();
+      if (!_body || _body.byteLength === 0) {
         reply.headers(proxyResponseHeaders);
         return reply.send();
       }
 
       // encode body
-      const encodedBody = await mkeEncode(_body, {
+      const encodedBody = await mkeEncode(new Uint8Array(_body), {
         stateId: `encoder.${request.clientId}.${request.pairId}`,
         output: "Uint8Array",
         type: request.encoderType,
