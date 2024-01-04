@@ -2,7 +2,7 @@
  * Pull in settings as JSON from Github Gist
  *
  * Dependencies:
- *  - none (axios is already a dependency of mte-relay-server)
+ *  - npm i axios
  */
 
 const axios = require("axios");
