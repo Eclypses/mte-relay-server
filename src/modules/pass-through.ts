@@ -1,4 +1,3 @@
-import axios from "axios";
 import { FastifyPluginCallback } from "fastify";
 import { contentTypeIsText } from "../utils/is-text";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
@@ -37,42 +36,23 @@ const passThroughRoutes: FastifyPluginCallback<{
           request.body = text;
         }
 
-        // clone headers
-        const proxyHeaders = { ...request.headers };
-        delete proxyHeaders.host;
+        const { host, ...headersSansHost } = request.headers;
 
-        // proxy request
-        const proxyResponse = await axios({
+        const proxyResponse = await fetch(options.upstream + request.url, {
           method: request.method,
-          url: options.upstream + request.url,
-          headers: proxyHeaders,
-          data: request.body,
-          maxRedirects: 0,
-          responseType: "arraybuffer",
-          validateStatus: (status) => status < 400,
-          transformRequest: [
-            (data, _headers) => {
-              // no transform
-              return data;
-            },
-          ],
-          transformResponse: [
-            (data, _headers) => {
-              // no transform
-              return data;
-            },
-          ],
+          headers: headersSansHost as unknown as HeadersInit,
+          body: request.body as unknown as ArrayBuffer,
         });
 
-        delete proxyResponse.headers["access-control-allow-origin"];
-        delete proxyResponse.headers["access-control-allow-methods"];
-        delete proxyResponse.headers["transfer-encoding"];
+        proxyResponse.headers.delete("access-control-allow-origin");
+        proxyResponse.headers.delete("access-control-allow-methods");
+        proxyResponse.headers.delete("transfer-encoding");
 
         reply.headers(proxyResponse.headers);
         reply.status(proxyResponse.status);
 
         // return response
-        return reply.send(proxyResponse.data);
+        return reply.send(await proxyResponse.arrayBuffer());
       } catch (error) {
         request.log.error(error);
         let message = "An unknown error occurred";

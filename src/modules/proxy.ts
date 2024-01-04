@@ -1,6 +1,5 @@
 import { FastifyRequest, FastifyInstance, FastifyReply, HTTPMethods } from "fastify";
 import { mkeDecode, mkeEncode } from "./mte";
-import axios, { AxiosResponse } from "axios";
 import fs from "fs";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
