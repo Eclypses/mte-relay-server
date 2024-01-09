@@ -1,6 +1,5 @@
 import axios from "axios";
 import { FastifyPluginCallback } from "fastify";
-import { contentTypeIsText } from "../utils/is-text";
 
 /**
  * - if a route matches the passThrough routes in options
