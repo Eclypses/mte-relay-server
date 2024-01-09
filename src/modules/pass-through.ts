@@ -1,7 +1,6 @@
 import axios from "axios";
 import { FastifyPluginCallback } from "fastify";
 import { contentTypeIsText } from "../utils/is-text";
-import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 
 /**
  * - if a route matches the passThrough routes in options
@@ -10,7 +9,6 @@ import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 const passThroughRoutes: FastifyPluginCallback<{
   routes: string[];
   upstream: string;
-  maxFormDataSize: number;
 }> = (fastify, options, done: any) => {
   // remove all content type parsers
   fastify.removeAllContentTypeParsers();
@@ -23,14 +21,6 @@ const passThroughRoutes: FastifyPluginCallback<{
   options.routes.forEach((route) => {
     fastify.all(route, async (request, reply) => {
       try {
-        const contentType = request.headers["content-type"];
-
-        if (contentType && contentTypeIsText(contentType)) {
-          const textDecoder = new TextDecoder("utf-8");
-          const text = textDecoder.decode(request.body as Uint8Array);
-          request.body = text;
-        }
-
         // clone headers
         const proxyHeaders = { ...request.headers };
         delete proxyHeaders.host;

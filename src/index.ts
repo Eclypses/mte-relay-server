@@ -84,7 +84,6 @@ let server: FastifyInstance | null = null;
     await server.register(passThrough, {
       routes: SETTINGS.PASS_THROUGH_ROUTES,
       upstream: SETTINGS.UPSTREAM,
-      maxFormDataSize: SETTINGS.MAX_FORM_DATA_SIZE,
     });
 
     // register proxy
