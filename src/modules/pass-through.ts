@@ -10,20 +10,14 @@ import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 const passThroughRoutes: FastifyPluginCallback<{
   routes: string[];
   upstream: string;
+  maxFormDataSize: number;
 }> = (fastify, options, done: any) => {
   // remove all content type parsers
   fastify.removeAllContentTypeParsers();
 
-  // clone body
-  fastify.addContentTypeParser("*", function (request, payload, done) {
-    // parse data
-    let _buffer = new Uint8Array();
-    payload.on("data", (chunk: Uint8Array) => {
-      _buffer = concatTwoUint8Arrays(_buffer, chunk);
-    });
-    payload.on("end", () => {
-      done(null, _buffer.length > 0 ? _buffer : undefined);
-    });
+  // all requests, handle incoming body as stream
+  fastify.addContentTypeParser("*", function (_request, payload, done) {
+    done(null);
   });
 
   options.routes.forEach((route) => {
@@ -46,22 +40,10 @@ const passThroughRoutes: FastifyPluginCallback<{
           method: request.method,
           url: options.upstream + request.url,
           headers: proxyHeaders,
-          data: request.body,
+          data: request.raw,
           maxRedirects: 0,
-          responseType: "arraybuffer",
-          validateStatus: (status) => status < 400,
-          transformRequest: [
-            (data, _headers) => {
-              // no transform
-              return data;
-            },
-          ],
-          transformResponse: [
-            (data, _headers) => {
-              // no transform
-              return data;
-            },
-          ],
+          responseType: "stream",
+          validateStatus: (status) => status < 400
         });
 
         delete proxyResponse.headers["access-control-allow-origin"];
