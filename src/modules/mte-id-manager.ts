@@ -3,15 +3,13 @@ import fastifyPlugin from "fastify-plugin";
 import crypto from "crypto";
 import { signAString, verifySignedString } from "../utils/signed-ids";
 import { MteRelayError } from "./mte/errors";
-import { parseMteRelayHeader } from "../utils/mte-relay-header";
+import { RelayOptions, parseMteRelayHeader } from "../utils/mte-relay-header";
 
 // extend FastifyRequest interface with decorator method
 declare module "fastify" {
   interface FastifyRequest {
-    clientId: null | string;
-    clientIdSigned: null | string;
-    pairId: null | string;
-    encoderType: "MKE" | "MTE";
+    relayOptions: RelayOptions;
+    clientIdSigned: string;
   }
 }
 
@@ -27,36 +25,32 @@ const mteIdManager: FastifyPluginCallback<{
   clientIdSecret: string;
   mteRelayHeader: string;
 }> = (fastify, options, done) => {
-  fastify.decorateRequest("clientId", null);
-  fastify.decorateRequest("clientIdSigned", null);
-  fastify.decorateRequest("pairId", null);
-  fastify.decorateRequest("encoderType", "MKE");
+  // set default object for request.relayOptions
+  fastify.decorateRequest("relayOptions", {});
 
   // on every request
   fastify.addHook("onRequest", (request, reply, _done) => {
     try {
       // parse x-mte-relay header from request
       const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
-      let relayValues: any = {};
       if (mteRelayHeader) {
-        relayValues = parseMteRelayHeader(mteRelayHeader);
+        request.relayOptions = parseMteRelayHeader(mteRelayHeader);
       }
-      request.pairId = relayValues.pairId;
-      request.encoderType = relayValues.type;
 
       // use existing clientId, or generate a new one
-      let clientId: string = crypto.randomUUID();
-      if (relayValues.clientId) {
-        const verified = verifySignedString(relayValues.clientId, options.clientIdSecret);
+      if (request.relayOptions.clientId) {
+        const verified = verifySignedString(request.relayOptions.clientId, options.clientIdSecret);
         if (!verified) {
           request.log.error(`Invalid Client ID.`);
           throw new MteRelayError("Invalid Client ID header.");
         }
-        clientId = verified;
+      } else {
+        request.relayOptions.clientId = crypto.randomUUID();
       }
-      const signedClientId = signAString(clientId, options.clientIdSecret);
+
+      // create signed clientId
+      const signedClientId = signAString(request.relayOptions.clientId, options.clientIdSecret);
       request.clientIdSigned = signedClientId;
-      request.clientId = clientId;
     } catch (error) {
       request.log.error(error);
       if (error instanceof MteRelayError) {
