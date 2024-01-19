@@ -214,4 +214,4 @@ const data = await response.json();
 
 At this point, you have successfully create an MTE Relay server on AWS and integrated the client module into your website code. While it is outside the scope of this guide, your next step should be to configure a custom DNS for your MTE Relay server and forward traffic at that DNS to your load balancer, and to default to using HTTPS traffic.
 
-If you have questions or need assistance, please send an email to support@eclypses.com.
+If you have questions or need assistance, please send an email to customer_support@eclypses.com.
