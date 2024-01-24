@@ -36,7 +36,6 @@ const mteIdManager: FastifyPluginCallback<{
       if (mteRelayHeader) {
         request.relayOptions = parseMteRelayHeader(mteRelayHeader);
       }
-
       // use existing clientId, or generate a new one
       if (request.relayOptions.clientId) {
         const verified = verifySignedString(
@@ -49,6 +48,7 @@ const mteIdManager: FastifyPluginCallback<{
           );
           throw new MteRelayError("Invalid Client ID header.");
         }
+        request.relayOptions.clientId = verified;
       } else {
         request.relayOptions.clientId = crypto.randomUUID();
       }
