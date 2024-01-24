@@ -1,6 +1,5 @@
 import { FastifyPluginCallback } from "fastify";
-import { contentTypeIsText } from "../utils/is-text";
-import { concatTwoUint8Arrays } from "../utils/concat-arrays";
+import { Readable } from "node:stream";
 
 /**
  * - if a route matches the passThrough routes in options
@@ -12,47 +11,36 @@ const passThroughRoutes: FastifyPluginCallback<{
 }> = (fastify, options, done: any) => {
   // remove all content type parsers
   fastify.removeAllContentTypeParsers();
-
-  // clone body
   fastify.addContentTypeParser("*", function (request, payload, done) {
-    // parse data
-    let _buffer = new Uint8Array();
-    payload.on("data", (chunk: Uint8Array) => {
-      _buffer = concatTwoUint8Arrays(_buffer, chunk);
-    });
-    payload.on("end", () => {
-      done(null, _buffer.length > 0 ? _buffer : undefined);
-    });
+    done(null);
   });
 
   options.routes.forEach((route) => {
     fastify.all(route, async (request, reply) => {
       try {
-        const contentType = request.headers["content-type"];
-
-        if (contentType && contentTypeIsText(contentType)) {
-          const textDecoder = new TextDecoder("utf-8");
-          const text = textDecoder.decode(request.body as Uint8Array);
-          request.body = text;
-        }
-
         const { host, ...headersSansHost } = request.headers;
 
         const proxyResponse = await fetch(options.upstream + request.url, {
           method: request.method,
           headers: headersSansHost as unknown as HeadersInit,
-          body: request.body as unknown as ArrayBuffer,
+          body: request.raw as unknown as ReadableStream<Uint8Array>,
+          // @ts-ignore - required, but not in TS definitions
+          duplex: "half",
         });
 
-        proxyResponse.headers.delete("access-control-allow-origin");
-        proxyResponse.headers.delete("access-control-allow-methods");
-        proxyResponse.headers.delete("transfer-encoding");
+        const headers = new Headers(proxyResponse.headers);
 
-        reply.headers(proxyResponse.headers);
+        // @ts-ignore - it's fine.
+        reply.headers(headers);
         reply.status(proxyResponse.status);
 
-        // return response
-        return reply.send(await proxyResponse.arrayBuffer());
+        let stream = null;
+        if (proxyResponse.body) {
+          // @ts-ignore - also fine.
+          stream = Readable.fromWeb(proxyResponse.body);
+        }
+
+        return reply.send(stream);
       } catch (error) {
         request.log.error(error);
         let message = "An unknown error occurred";

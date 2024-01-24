@@ -1,9 +1,16 @@
-import { FastifyRequest, FastifyInstance, FastifyReply, HTTPMethods } from "fastify";
+import {
+  FastifyRequest,
+  FastifyInstance,
+  FastifyReply,
+  HTTPMethods,
+} from "fastify";
 import { mkeDecode, mkeEncode } from "./mte";
 import fs from "fs";
 import { concatTwoUint8Arrays } from "../utils/concat-arrays";
 import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
 import { MteRelayError } from "./mte/errors";
+import mteIdManager from "./mte-id-manager";
+import { mtePairRoutes } from "./api";
 
 function proxyHandler(
   fastify: FastifyInstance,
@@ -15,9 +22,16 @@ function proxyHandler(
     outboundToken?: string;
     mteRelayHeader: string;
     encodedHeadersHeader: string;
+    clientIdSecret: string;
   },
   done: any
 ) {
+  // register MTE ID Manager
+  fastify.register(mteIdManager, {
+    mteRelayHeader: options.mteRelayHeader,
+    clientIdSecret: options.clientIdSecret,
+  });
+
   // log mte usage
   fastify.addHook("onRequest", async (request, reply) => {
     if (!request.relayOptions.clientId) {
@@ -55,7 +69,9 @@ function proxyHandler(
 
   // remove OPTIONS from httpMethods, they are not needed for server-to-server proxy
   const disallowedMethods = ["OPTIONS", "HEAD"];
-  const methods = options.httpMethods.filter((method) => !disallowedMethods.includes(method));
+  const methods = options.httpMethods.filter(
+    (method) => !disallowedMethods.includes(method)
+  );
 
   // support white-listed MTE routes, or default all routes to MTE proxy
   if (options.routes) {
@@ -113,7 +129,9 @@ function proxyHandler(
 
       // decoded headers
       let mkeDecodedHeaders: Record<string, string> = {};
-      const encodedHeaders = request.headers[options.encodedHeadersHeader] as string;
+      const encodedHeaders = request.headers[
+        options.encodedHeadersHeader
+      ] as string;
       if (encodedHeaders) {
         const decodedHeaders = await mkeDecode(encodedHeaders, {
           stateId: `decoder.${request.relayOptions.clientId}.${request.relayOptions.pairId}`,
@@ -133,7 +151,8 @@ function proxyHandler(
        */
       if (Boolean(request.body)) {
         // decode incoming payload
-        const contentType = request.headers["content-type"] || "application/json";
+        const contentType =
+          request.headers["content-type"] || "application/json";
         let decodedPayload: any = request.body;
         if (request.body) {
           decodedPayload = await mkeDecode(request.body as any, {
@@ -180,7 +199,9 @@ function proxyHandler(
         return reply.status(500).send("No Response.");
       }
 
-      request.log.debug(`Proxy Response Headers - Original:\n${proxyResponse.headers}`);
+      request.log.debug(
+        `Proxy Response Headers - Original:\n${proxyResponse.headers}`
+      );
 
       // create response headers
       const methods = proxyResponse.headers.get("access-control-allow-methods");
@@ -198,7 +219,9 @@ function proxyHandler(
         if (replyHeader) {
           value.push(makeHeaderAString(replyHeader));
         }
-        const proxyResponseHeader = proxyResponse.headers.get("access-control-allow-headers");
+        const proxyResponseHeader = proxyResponse.headers.get(
+          "access-control-allow-headers"
+        );
         if (proxyResponseHeader) {
           value.push(makeHeaderAString(proxyResponseHeader));
         }
@@ -210,7 +233,9 @@ function proxyHandler(
         if (replyHeader) {
           value.push(makeHeaderAString(replyHeader));
         }
-        const proxyResponseHeader = proxyResponse.headers.get("access-control-expose-headers");
+        const proxyResponseHeader = proxyResponse.headers.get(
+          "access-control-expose-headers"
+        );
         if (proxyResponseHeader) {
           value.push(makeHeaderAString(proxyResponseHeader));
         }
@@ -227,7 +252,9 @@ function proxyHandler(
         proxyResponseHeaders["set-cookie"] = setCookie;
       }
 
-      request.log.debug(`Proxy Response Headers - Modified:\n${proxyResponse.headers}`);
+      request.log.debug(
+        `Proxy Response Headers - Modified:\n${proxyResponse.headers}`
+      );
       // encode headers
       const headersToEncode: Record<string, string> = {};
       const contentTypeHeader = proxyResponse.headers.get("content-type");
@@ -245,7 +272,8 @@ function proxyHandler(
       }).catch((err) => {
         throw new MteRelayError("Failed to encode.", err);
       });
-      proxyResponseHeaders[options.encodedHeadersHeader] = encodedResponseHeaders as string;
+      proxyResponseHeaders[options.encodedHeadersHeader] =
+        encodedResponseHeaders as string;
 
       // copy proxyResponse headers to reply
       reply.headers(proxyResponseHeaders);

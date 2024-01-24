@@ -3,8 +3,8 @@ import { z } from "zod";
 import { getEcdh } from "../utils/ecdh";
 import { instantiateEncoder, instantiateDecoder } from "./mte";
 import { getNonce } from "../utils/nonce";
-import { MTE_ERRORS, MteRelayError } from "./mte/errors";
-import { parseMteRelayHeader } from "../utils/mte-relay-header";
+import { MteRelayError } from "./mte/errors";
+import mteIdManager from "./mte-id-manager";
 
 const mtePairSchema = z.object({
   encoderPublicKey: z.string(),
@@ -26,9 +26,22 @@ const bodySchema = z.union([mtePairSchema, mtePairArraySchema]);
 /**
  * Protect API Routes that require x-mte-id header
  */
-export const protectedApiRoutes: FastifyPluginCallback<{
+export const mtePairRoutes: FastifyPluginCallback<{
   mteRelayHeader: string;
-}> = (fastify, options, done) => {
+  clientIdSecret: string;
+}> = async (fastify, options, done) => {
+  // Register MTE ID manager module
+  await fastify.register(mteIdManager, {
+    clientIdSecret: options.clientIdSecret,
+    mteRelayHeader: options.mteRelayHeader,
+  });
+
+  // HEAD /api/mte-relay
+  fastify.head("/api/mte-relay", (request, reply) => {
+    reply.header(options.mteRelayHeader, request.clientIdSigned);
+    reply.status(200).send();
+  });
+
   // mte pair route
   fastify.post("/api/mte-pair", async (request, reply) => {
     try {
@@ -38,7 +51,9 @@ export const protectedApiRoutes: FastifyPluginCallback<{
       const validationResult = bodySchema.safeParse(request.body);
       if (!validationResult.success) {
         request.log.error(validationResult.error);
-        return reply.status(400).send(JSON.stringify(validationResult.error, null, 2));
+        return reply
+          .status(400)
+          .send(JSON.stringify(validationResult.error, null, 2));
       }
 
       if (Array.isArray(validationResult.data)) {
@@ -48,7 +63,9 @@ export const protectedApiRoutes: FastifyPluginCallback<{
           // create encoder
           const encoderNonce = getNonce();
           const encoderEcdh = getEcdh();
-          const encoderEntropy = encoderEcdh.computeSharedSecret(pair.decoderPublicKey);
+          const encoderEntropy = encoderEcdh.computeSharedSecret(
+            pair.decoderPublicKey
+          );
           instantiateEncoder({
             id: `encoder.${request.relayOptions.clientId}.${pair.pairId}`,
             entropy: encoderEntropy,
@@ -59,7 +76,9 @@ export const protectedApiRoutes: FastifyPluginCallback<{
           // create decoder
           const decoderNonce = getNonce();
           const decoderEcdh = getEcdh();
-          const decoderEntropy = decoderEcdh.computeSharedSecret(pair.encoderPublicKey);
+          const decoderEntropy = decoderEcdh.computeSharedSecret(
+            pair.encoderPublicKey
+          );
           instantiateDecoder({
             id: `decoder.${request.relayOptions.clientId}.${pair.pairId}`,
             entropy: decoderEntropy,
@@ -138,30 +157,5 @@ export const protectedApiRoutes: FastifyPluginCallback<{
 export const anonymousApiRoutes: FastifyPluginCallback<{
   mteRelayHeader: string;
 }> = (fastify, options, done) => {
-  // echo endpoint
-  fastify.get<{Params: {msg?: string}}>("/api/mte-echo/:msg?", (request, reply) => {
-    reply.send({
-      echo: request.params.msg || true,
-      time: Date.now(),
-    });
-  });
-
-  // /api/mte-errors
-  fastify.get("/api/mte-errors", (request, reply) => {
-    reply.send(MTE_ERRORS);
-  });
-
-  // HEAD /api/mte-relay
-  fastify.head("/api/mte-relay", (request, reply) => {
-    reply.header(options.mteRelayHeader, request.clientIdSigned);
-    reply.status(200).send();
-  });
-
-  // GET /api/decode-headers/:headers
-  fastify.get<{Params: {headers: string}}>("/api/decode-headers/:headers", (request, reply) => {
-    const result = parseMteRelayHeader(request.params.headers);
-    reply.send(result);
-  });
-
   done();
 };

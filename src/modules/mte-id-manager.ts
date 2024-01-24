@@ -39,9 +39,14 @@ const mteIdManager: FastifyPluginCallback<{
 
       // use existing clientId, or generate a new one
       if (request.relayOptions.clientId) {
-        const verified = verifySignedString(request.relayOptions.clientId, options.clientIdSecret);
+        const verified = verifySignedString(
+          request.relayOptions.clientId,
+          options.clientIdSecret
+        );
         if (!verified) {
-          request.log.error(`Invalid Client ID.`);
+          request.log.error(
+            `Invalid Client ID: ${request.relayOptions.clientId}`
+          );
           throw new MteRelayError("Invalid Client ID header.");
         }
       } else {
@@ -49,7 +54,10 @@ const mteIdManager: FastifyPluginCallback<{
       }
 
       // create signed clientId
-      const signedClientId = signAString(request.relayOptions.clientId, options.clientIdSecret);
+      const signedClientId = signAString(
+        request.relayOptions.clientId,
+        options.clientIdSecret
+      );
       request.clientIdSigned = signedClientId;
     } catch (error) {
       request.log.error(error);

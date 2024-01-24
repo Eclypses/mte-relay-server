@@ -1,5 +1,4 @@
 import { FastifyPluginCallback } from "fastify";
-import fastifyPlugin from "fastify-plugin";
 import { instantiateMteWasm } from "./mte";
 import { z } from "zod";
 
@@ -53,4 +52,4 @@ const initMte: FastifyPluginCallback<{
   }
 };
 
-export default fastifyPlugin(initMte);
+export default initMte;

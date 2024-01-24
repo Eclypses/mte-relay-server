@@ -2,21 +2,21 @@ import Fastify, { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import crypto from "crypto";
 
-import { anonymousApiRoutes, protectedApiRoutes } from "./modules/api";
-import getLogSettings from "./modules/log";
-import proxy from "./modules/proxy";
-import headers from "./modules/headers";
-import mteInit from "./modules/mte-init";
 import settings from "./modules/settings";
-import passThrough from "./modules/pass-through";
-import mteIdManager from "./modules/mte-id-manager";
 import { startupChecks } from "./modules/startup-checks";
+import getLogSettings from "./modules/log";
+import mteInit from "./modules/mte-init";
+import headers from "./modules/headers";
+import { publicRoutes } from "./modules/public-routes";
+import proxy from "./modules/proxy";
+import { mtePairRoutes } from "./modules/api";
 
 let server: FastifyInstance | null = null;
 
 // start server
 (async () => {
   try {
+    // get settings
     const SETTINGS = await settings();
 
     // startup checks
@@ -28,6 +28,17 @@ let server: FastifyInstance | null = null;
       genReqId: () => crypto.randomUUID(),
     });
 
+    // Register cors plugins
+    await server.register(cors, {
+      origin: SETTINGS.CORS_ORIGINS,
+      methods: SETTINGS.CORS_METHODS,
+      credentials: true,
+      exposedHeaders: [
+        SETTINGS.ENCODED_HEADERS_HEADER,
+        SETTINGS.MTE_RELAY_HEADER,
+      ],
+    });
+
     // Register MTE init module
     await server.register(mteInit, {
       licenseCompany: SETTINGS.LICENSE_COMPANY,
@@ -35,39 +46,21 @@ let server: FastifyInstance | null = null;
       maxPoolSize: SETTINGS.MAX_POOL_SIZE,
     });
 
-    // Register cors plugins
-    await server.register(cors, {
-      origin: SETTINGS.CORS_ORIGINS,
-      methods: SETTINGS.CORS_METHODS,
-      credentials: true,
-      exposedHeaders: [SETTINGS.ENCODED_HEADERS_HEADER, SETTINGS.MTE_RELAY_HEADER],
-    });
-
     // register custom headers, if they exist
     await server.register(headers, {
       headers: SETTINGS.HEADERS as Record<string, string>,
     });
 
-    // Register MTE ID manager module
-    await server.register(mteIdManager, {
-      clientIdSecret: SETTINGS.CLIENT_ID_SECRET,
-      mteRelayHeader: SETTINGS.MTE_RELAY_HEADER,
-    });
-
-    // register anonymous API routes
-    await server.register(anonymousApiRoutes, {
-      mteRelayHeader: SETTINGS.MTE_RELAY_HEADER,
+    // register non-MTE routes
+    server.register(publicRoutes, {
+      routes: SETTINGS.PASS_THROUGH_ROUTES,
+      upstream: SETTINGS.UPSTREAM,
     });
 
     // register protected API routes
-    await server.register(protectedApiRoutes, {
+    await server.register(mtePairRoutes, {
       mteRelayHeader: SETTINGS.MTE_RELAY_HEADER,
-    });
-
-    // register pass-through routes
-    await server.register(passThrough, {
-      routes: SETTINGS.PASS_THROUGH_ROUTES,
-      upstream: SETTINGS.UPSTREAM,
+      clientIdSecret: SETTINGS.CLIENT_ID_SECRET,
     });
 
     // register proxy
@@ -78,6 +71,7 @@ let server: FastifyInstance | null = null;
       encodedHeadersHeader: SETTINGS.ENCODED_HEADERS_HEADER,
       routes: SETTINGS.MTE_ROUTES,
       mteRelayHeader: SETTINGS.MTE_RELAY_HEADER,
+      clientIdSecret: SETTINGS.CLIENT_ID_SECRET,
     });
 
     await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });
