@@ -27,10 +27,10 @@ export const publicRoutes: FastifyPluginCallback<{
   });
 
   // GET /api/decode-headers/:headers
-  fastify.get<{ Params: { headers: string } }>(
-    "/api/decode-headers/:headers",
+  fastify.get<{ Querystring: { headers: string } }>(
+    "/api/mte-decode",
     (request, reply) => {
-      const result = parseMteRelayHeader(request.params.headers);
+      const result = parseMteRelayHeader(request.query.headers);
       reply.send(result);
     }
   );
