@@ -1,0 +1,21 @@
+# docker build . -t mte-relay-server-node-20-alpine  -f Dockerfile-node
+
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Clone mte-relay-server 
+COPY ./dist/index.js .
+COPY ./package.json .
+COPY ./.npmrc .
+
+RUN npm i mte@npm:@eclypses/tblackman-llc-mte-relay-demo-sales-demo-mte-relay
+
+# This _should_ be mapped into the container, but this is fine for testing.
+COPY ./mte-relay-config.yaml .
+
+# Expose port
+EXPOSE 8080
+
+CMD ["node","index.js"]
+
