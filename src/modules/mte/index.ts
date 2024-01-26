@@ -109,7 +109,10 @@ export async function instantiateMteWasm(options: {
   mteWasm = new MteWasm();
   await mteWasm.instantiate();
   const mteBase = new MteBase(mteWasm);
-  const initResult = mteBase.initLicense(options.companyName, options.licenseKey);
+  const initResult = mteBase.initLicense(
+    options.companyName,
+    options.licenseKey
+  );
   if (!initResult) {
     const licenseStatus = MteStatus.mte_status_license_error;
     const status = mteBase.getStatusName(licenseStatus);
@@ -252,6 +255,123 @@ export async function mkeDecode(
   returnDecoderToPool(decoder);
   return "str" in decodeResult ? decodeResult.str : decodeResult.arr;
 }
+
+export async function encode(options: {
+  id: string;
+  type: EncDecTypes;
+  items: {
+    data: string | Uint8Array;
+    output: "B64" | "Uint8Array";
+  }[];
+}) {
+  const currentState = await cache.takeState(options.id);
+  if (!currentState) {
+    throw new MteRelayError("State not found.", {
+      stateId: options.id,
+    });
+  }
+  const encoder = getEncoderFromPool(options.type);
+  restoreMteState(encoder, currentState);
+  // nextState generation + save nextState in cache
+  if (options.type === "MKE") {
+    let nextStateResult: MteStatus = 0;
+    let i = 0;
+    const iMax = options.items.length;
+    for (; i < iMax; ++i) {
+      nextStateResult = encoder.encodeStr("").status;
+    }
+    validateStatusIsSuccess(nextStateResult, encoder);
+    const nextState = getMteState(encoder);
+    await cache.saveState(options.id, nextState);
+    restoreMteState(encoder, currentState);
+  }
+  let encodeResults: (String | Uint8Array)[] = [];
+  try {
+    for (const item of options.items) {
+      let encodeResult: MteArrStatus | MteStrStatus;
+      if (item.data instanceof Uint8Array) {
+        if (item.output === "Uint8Array") {
+          encodeResult = encoder.encode(item.data);
+        } else {
+          encodeResult = encoder.encodeB64(item.data);
+        }
+      } else {
+        if (item.output === "Uint8Array") {
+          encodeResult = encoder.encodeStr(item.data);
+        } else {
+          encodeResult = encoder.encodeStrB64(item.data);
+        }
+      }
+      validateStatusIsSuccess(encodeResult.status, encoder);
+      encodeResults.push(
+        "str" in encodeResult ? encodeResult.str! : encodeResult.arr!
+      );
+    }
+  } catch (error) {
+    returnEncoderToPool(encoder);
+    throw new MteRelayError("Failed to encode.", {
+      stateId: options.id,
+      error: (error as Error).message,
+    });
+  }
+  if (options.type === "MTE") {
+    const state = getMteState(encoder);
+    await cache.saveState(options.id, state);
+  }
+  returnEncoderToPool(encoder);
+  return encodeResults;
+}
+export async function decode(options: {
+  id: string;
+  type: EncDecTypes;
+  items: {
+    data: string | Uint8Array;
+    output: "str" | "Uint8Array";
+  }[];
+}) {
+  const currentState = await cache.takeState(options.id);
+  if (!currentState) {
+    throw new MteRelayError("State not found.", {
+      stateId: options.id,
+    });
+  }
+  const decoder = getDecoderFromPool(options.type);
+  restoreMteState(decoder, currentState);
+  drbgReseedCheck(decoder);
+  const decodeResults: (String | Uint8Array)[] = [];
+  try {
+    for (const item of options.items) {
+      let decodeResult: MteArrStatus | MteStrStatus;
+      if (item.data instanceof Uint8Array) {
+        if (item.output === "Uint8Array") {
+          decodeResult = decoder.decode(item.data);
+        } else {
+          decodeResult = decoder.decodeStr(item.data);
+        }
+      } else {
+        if (item.output === "Uint8Array") {
+          decodeResult = decoder.decodeB64(item.data);
+        } else {
+          decodeResult = decoder.decodeStrB64(item.data);
+        }
+      }
+      validateStatusIsSuccess(decodeResult.status, decoder);
+      decodeResults.push(
+        "str" in decodeResult ? decodeResult.str! : decodeResult.arr!
+      );
+    }
+  } catch (error) {
+    returnDecoderToPool(decoder);
+    throw new MteRelayError("Failed to decode.", {
+      stateId: options.id,
+      error: (error as Error).message,
+    });
+  }
+  const state = getMteState(decoder);
+  returnDecoderToPool(decoder);
+  await cache.saveState(options.id, state);
+  return decodeResults;
+}
 function validateStatusIsSuccess(status: MteStatus, mteBase: MteBase) {
   if (status !== MteStatus.mte_status_success) {
     const isError = mteBase.statusIsError(status);
@@ -279,7 +399,9 @@ function getMteState(encoder: EncDec) {
 }
 function drbgReseedCheck(encoder: EncDec) {
   const drbg = encoder.getDrbg();
-  const threshhold = Number(String(encoder.getDrbgsReseedInterval(drbg)).substring(0, 15));
+  const threshhold = Number(
+    String(encoder.getDrbgsReseedInterval(drbg)).substring(0, 15)
+  );
   const counter = Number(String(encoder.getReseedCounter()).substring(0, 15));
   const reseedIsRequired = counter / threshhold > 0.9;
   if (reseedIsRequired) {
