@@ -6,10 +6,10 @@ import {
 } from "fastify";
 import { Readable } from "stream";
 import { decode, encode } from "./mte";
-import fs from "fs";
 import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
 import { MteRelayError } from "./mte/errors";
 import mteIdManager from "./mte-id-manager";
+import { RelayOptions, formatMteRelayHeader } from "../utils/mte-relay-header";
 
 function proxyHandler(
   fastify: FastifyInstance,
@@ -241,7 +241,7 @@ function proxyHandler(
       delete responseHeaders["access-control-allow-origin"];
       responseHeaders[options.encodedHeadersHeader];
 
-      // copy cookies - TODO - can i delete this
+      // copy cookies
       const setCookie = proxyResponse.headers.get("set-cookie");
       if (setCookie) {
         responseHeaders["set-cookie"] = setCookie;
@@ -259,29 +259,33 @@ function proxyHandler(
 
       // collect Headers to encode
       const headersToEncode: Record<string, string> = {};
-      const contentTypeHeader = proxyResponse.headers.get("content-type");
-      if (contentTypeHeader) {
-        headersToEncode["content-type"] = contentTypeHeader;
-      }
       Object.keys(decodedHeaders).forEach((key) => {
         const value = proxyResponse?.headers.get(key);
         if (value) {
           headersToEncode[key] = value;
         }
       });
-      const encodedHeadersJson = JSON.stringify(headersToEncode);
-      itemsToEncode.push({ data: encodedHeadersJson, output: "B64" });
+      const contentTypeHeader = proxyResponse.headers.get("content-type");
+      if (contentTypeHeader) {
+        headersToEncode["content-type"] = contentTypeHeader;
+      }
+      const hasEncodedHeaders = Object.keys(headersToEncode).length > 0;
+      if (hasEncodedHeaders) {
+        const encodedHeadersJson = JSON.stringify(headersToEncode);
+        itemsToEncode.push({ data: encodedHeadersJson, output: "B64" });
+      }
 
-      // if no body, send reply
+      // get body to encode
       const _body = await proxyResponse.arrayBuffer();
-      const encodeBody = _body.byteLength > 0;
-      if (encodeBody) {
+      const hasEncodedBody = _body.byteLength > 0;
+      if (hasEncodedBody) {
         itemsToEncode.push({
           data: new Uint8Array(_body),
           output: "Uint8Array",
         });
       }
 
+      // encode response
       const results = await encode({
         id: `encoder.${request.relayOptions.clientId}.${request.relayOptions.pairId}`,
         items: itemsToEncode,
@@ -289,7 +293,7 @@ function proxyHandler(
       });
 
       // attached encoded headers to response
-      if (Object.keys(headersToEncode).length > 0) {
+      if (hasEncodedHeaders) {
         responseHeaders[options.encodedHeadersHeader] = results[0] as string;
         results.shift();
       }
@@ -297,11 +301,24 @@ function proxyHandler(
       let payload: any = undefined;
 
       // if body is encoded, update payload
-      if (encodeBody) {
+      if (hasEncodedBody) {
         payload = results[0];
         responseHeaders["content-type"] = "application/octet-stream";
         responseHeaders["content-length"] = payload.length.toString();
       }
+
+      // set relay options header
+      const responseRelayOptions: RelayOptions = {
+        clientId: request.clientIdSigned,
+        pairId: request.relayOptions.pairId,
+        encodeType: request.relayOptions.encodeType,
+        urlIsEncoded: false,
+        headersAreEncoded: hasEncodedHeaders,
+        bodyIsEncoded: hasEncodedBody,
+      };
+      const responseRelayOptionsHeader =
+        formatMteRelayHeader(responseRelayOptions);
+      responseHeaders[options.mteRelayHeader] = responseRelayOptionsHeader;
 
       // copy proxyResponse headers to reply
       reply.status(proxyResponse.status);
