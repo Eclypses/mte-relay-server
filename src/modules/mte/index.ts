@@ -8,6 +8,9 @@ import {
   MteStatus,
   MteArrStatus,
   MteStrStatus,
+  MteKyber,
+  MteKyberStatus,
+  MteKyberStrength,
 } from "mte";
 import { setItem, takeItem } from "./memory-cache";
 import { MteRelayError } from "./errors";
@@ -95,7 +98,6 @@ function returnDecoderToPool(decoder: MteMkeDec | MteDec) {
   return decoder.destruct();
 }
 
-// init MteWasm
 export async function instantiateMteWasm(options: {
   licenseKey: string;
   companyName: string;
@@ -157,105 +159,6 @@ export async function instantiateDecoder(options: {
   await cache.saveState(options.id, state);
   returnDecoderToPool(decoder);
 }
-export async function mkeEncode(
-  payload: string | Uint8Array,
-  options: {
-    stateId: string;
-    output: "B64" | "Uint8Array";
-    type: EncDecTypes;
-  }
-) {
-  const encoder = getEncoderFromPool(options.type);
-  const currentState = await cache.takeState(options.stateId);
-  if (!currentState) {
-    returnEncoderToPool(encoder);
-    throw new MteRelayError("State not found.", {
-      stateId: options.stateId,
-    });
-  }
-  restoreMteState(encoder, currentState);
-  if (options.type === "MKE") {
-    const nextStateResult = encoder.encodeStr(""); // Note: intentionally left empty for NextEncoderStateGeneration
-    validateStatusIsSuccess(nextStateResult.status, encoder);
-    const nextState = getMteState(encoder);
-    await cache.saveState(options.stateId, nextState);
-    restoreMteState(encoder, currentState);
-  }
-  let encodeResult: MteArrStatus | MteStrStatus;
-  try {
-    if (payload instanceof Uint8Array) {
-      if (options.output === "Uint8Array") {
-        encodeResult = encoder.encode(payload);
-      } else {
-        encodeResult = encoder.encodeB64(payload);
-      }
-    } else {
-      if (options.output === "Uint8Array") {
-        encodeResult = encoder.encodeStr(payload);
-      } else {
-        encodeResult = encoder.encodeStrB64(payload);
-      }
-    }
-    validateStatusIsSuccess(encodeResult.status, encoder);
-    if (options.type === "MTE") {
-      const state = getMteState(encoder);
-      await cache.saveState(options.stateId, state);
-    }
-    returnEncoderToPool(encoder);
-  } catch (error) {
-    throw new MteRelayError("Failed to encode.", {
-      stateId: options.stateId,
-      error: (error as Error).message,
-    });
-  }
-  return "str" in encodeResult ? encodeResult.str : encodeResult.arr;
-}
-export async function mkeDecode(
-  payload: string | Uint8Array,
-  options: {
-    stateId: string;
-    output: "str" | "Uint8Array";
-    type: EncDecTypes;
-  }
-) {
-  const decoder = getDecoderFromPool(options.type);
-  const currentState = await cache.takeState(options.stateId);
-  if (!currentState) {
-    returnDecoderToPool(decoder);
-    throw new MteRelayError("State not found.", {
-      stateId: options.stateId,
-    });
-  }
-  restoreMteState(decoder, currentState);
-  drbgReseedCheck(decoder);
-  let decodeResult: MteArrStatus | MteStrStatus;
-  try {
-    if (payload instanceof Uint8Array) {
-      if (options.output === "Uint8Array") {
-        decodeResult = decoder.decode(payload);
-      } else {
-        decodeResult = decoder.decodeStr(payload);
-      }
-    } else {
-      if (options.output === "Uint8Array") {
-        decodeResult = decoder.decodeB64(payload);
-      } else {
-        decodeResult = decoder.decodeStrB64(payload);
-      }
-    }
-    validateStatusIsSuccess(decodeResult.status, decoder);
-  } catch (error) {
-    throw new MteRelayError("Failed to decode.", {
-      stateId: options.stateId,
-      error: (error as Error).message,
-    });
-  }
-  const state = getMteState(decoder);
-  await cache.saveState(options.stateId, state);
-  returnDecoderToPool(decoder);
-  return "str" in decodeResult ? decodeResult.str : decodeResult.arr;
-}
-
 export async function encode(options: {
   id: string;
   type: EncDecTypes;
@@ -385,7 +288,7 @@ function validateStatusIsSuccess(status: MteStatus, mteBase: MteBase) {
     }
   }
 }
-type EncDec = MteMkeEnc | MteMkeDec | MteEnc | MteDec;
+type EncDec = MteEnc | MteDec | MteMkeEnc | MteMkeDec;
 function restoreMteState(encdec: EncDec, state: string): void {
   const result = encdec.restoreStateB64(state);
   validateStatusIsSuccess(result, encdec);
@@ -407,4 +310,62 @@ function drbgReseedCheck(encoder: EncDec) {
   if (reseedIsRequired) {
     throw new MteRelayError("DRBG reseed is required.");
   }
+}
+
+export function getKyberInitiator() {
+  const initiator = new MteKyber(mteWasm, MteKyberStrength.K512);
+  const keyPair = initiator.createKeypair();
+  if (keyPair.status !== MteKyberStatus.success) {
+    throw new Error("Initiator: Failed to create the key pair.");
+  }
+  const publicKey = u8ToHex(keyPair.result1!);
+
+  function decryptSecret(encryptedSecretHex: string) {
+    const encryptedSecret = hexToU8(encryptedSecretHex);
+    const result = initiator.decryptSecret(encryptedSecret);
+    if (result.status !== MteKyberStatus.success) {
+      throw new Error("Initiator: Failed to decrypt the secret.");
+    }
+    const secret = u8ToHex(result.result1!);
+    return secret;
+  }
+
+  return {
+    publicKey,
+    decryptSecret,
+  };
+}
+
+export function getKyberResponder(publicKeyHex: string) {
+  const publicKey = hexToU8(publicKeyHex);
+  const responder = new MteKyber(mteWasm, MteKyberStrength.K512);
+  const result = responder.createSecret(publicKey);
+  if (result.status !== MteKyberStatus.success) {
+    throw new Error("Responder: Failed to create the key pair.");
+  }
+  // const secret = u8ToHex(result.result1!);
+  const encryptedSecret = u8ToHex(result.result2!);
+
+  return {
+    secret: result.result1!,
+    encryptedSecret,
+  };
+}
+
+function u8ToHex(uint8Array: Uint8Array): string {
+  let hexString = "";
+  for (let i = 0; i < uint8Array.length; i++) {
+    const byteHex = uint8Array[i].toString(16).padStart(2, "0");
+    hexString += byteHex;
+  }
+  return hexString;
+}
+
+function hexToU8(hexString: string): Uint8Array {
+  const uint8Array = new Uint8Array(hexString.length / 2);
+  for (let i = 0; i < hexString.length; i += 2) {
+    const byte = parseInt(hexString.substring(i, i + 2), 16);
+    uint8Array[i / 2] = byte;
+  }
+  return uint8Array;
 }
