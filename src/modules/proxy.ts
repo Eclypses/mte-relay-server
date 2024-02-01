@@ -136,10 +136,15 @@ function proxyHandler(
       }
 
       // create new headers
+      delete request.headers[options.mteRelayHeader];
+      delete request.headers["content-length"];
+      delete request.headers["transfer-encoding"];
+      delete request.headers["content-type"];
+      delete request.headers["Content-Type"];
+      delete request.headers[options.encodedHeadersHeader];
+      delete request.headers["host"];
+      delete request.headers["cache-control"];
       const proxyHeaders = cloneHeaders(request.headers);
-      delete proxyHeaders[options.encodedHeadersHeader];
-      delete proxyHeaders[options.mteRelayHeader];
-      delete proxyHeaders["content-length"];
       proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
       proxyHeaders["cache-control"] = "no-cache";
 
