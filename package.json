@@ -1,6 +1,6 @@
 {
   "name": "mte-relay-server",
-  "version": "3.4.0",
+  "version": "3.4.1",
   "description": "",
   "scripts": {
     "dev": "nodemon --watch src src/index.ts -- --log-adapter ../../examples/log-adapters/stdout.js",
@@ -30,7 +30,7 @@
     "zod": "^3.21.4"
   },
   "peerDependencies": {
-    "mte": "^3.0.0"
+    "mte": "^3.0.0 - ^4.0.0"
   },
   "devDependencies": {
     "@autotelic/pino-seq-transport": "^0.1.0",
