@@ -31,6 +31,7 @@ const mteIdManager: FastifyPluginCallback<{
   // on every request
   fastify.addHook("onRequest", (request, reply, _done) => {
     try {
+      request.relayOptions = {};
       // parse x-mte-relay header from request
       const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
       if (mteRelayHeader) {
