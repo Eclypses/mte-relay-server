@@ -1,5 +1,4 @@
 import { FastifyPluginCallback } from "fastify";
-import { Readable } from "node:stream";
 
 /**
  * - if a route matches the passThrough routes in options
@@ -34,13 +33,7 @@ const passThroughRoutes: FastifyPluginCallback<{
         reply.headers(headers);
         reply.status(proxyResponse.status);
 
-        let stream = null;
-        if (proxyResponse.body) {
-          // @ts-ignore - also fine.
-          stream = Readable.fromWeb(proxyResponse.body);
-        }
-
-        return reply.send(stream);
+        return reply.send(proxyResponse.body);
       } catch (error) {
         request.log.error(error);
         let message = "An unknown error occurred";
