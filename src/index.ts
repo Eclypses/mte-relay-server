@@ -72,6 +72,7 @@ let server: FastifyInstance | null = null;
       routes: SETTINGS.MTE_ROUTES,
       mteRelayHeader: SETTINGS.MTE_RELAY_HEADER,
       clientIdSecret: SETTINGS.CLIENT_ID_SECRET,
+      outboundToken: SETTINGS.OUTBOUND_TOKEN,
     });
 
     await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });
