@@ -1,3 +1,61 @@
+# Table of Contents
+- [Introduction:](#introduction)
+- [Customer Deployment](#customer-deployment)
+      + [Typical Customer Deployment](#typical-customer-deployment)
+      + [Configured Services](#when-completed-the-following-services-and-resources-will-be-set-up)
+   * [Deployment Options](#deployment-options)
+      + [Supported Regions](#supported-regions)
+   * [Port Mappings](#port-mappings)
+   * [Client-Side Implementation](#client-side-implementation)
+- [Prerequisites and Requirements](#prerequisites-and-requirements)
+   * [Technical](#technical)
+   * [Skills or Specialized Knowledge](#skills-or-specialized-knowledge)
+   * [Configuration](#configuration)
+      + [Other configuration variables](#other-configuration-variables)
+      + [Database Credentials](#database-credentials)
+      + [Key/Variable Rotation Recommendations](#keyvariable-rotation-recommendations)
+- [Architecture Diagrams](#architecture-diagrams)
+   * [Default Deployment - ECS Deployment](#default-deployment-ecs-deployment-ecs-deployment)
+   * [Alternative Deployment - EC2 Deployment – Single Container](#alternative-deployment-ec2-deployment-single-container-ec2-deployment-single-container)
+   * [Alternative Deployment - EKS Deployment – Multiple Load- Balanced Containers](#alternative-deployment-eks-deployment-multiple-load-balanced-containers-eks-deployment-multiple-load-balanced-containers)
+- [Security](#security)
+   * [AWS Identity and Access Management (IAM) Roles:](#aws-identity-and-access-management-iam-roles)
+      + [VPC (Virtual Private Cloud)](#vpc-virtual-private-cloud)
+- [Costs](#costs)
+      + [Billable Services](#billable-services)
+- [Sizing](#sizing)
+   * [ECS](#ecs)
+- [Setup - Deployment Assets](#deployment-assets)
+   * [VPC Setup](#vpc-setup)
+   * [AWS ElastiCache Redis Setup](#aws-elasticache-redis-setup)
+      + [ElastiCache Security Group Settings](#elasticache-security-group-settings)
+      + [ElastiCache Setup](#elasticache-setup)
+   * [Setting up Elastic Container Service (ECS)](#setting-up-elastic-container-service-ecs)
+      + [Create an ECS Cluster](#create-an-ecs-cluster)
+   * [AWS ECS Setup – Task Definition](#aws-ecs-setup-task-definition)
+      + [Infrastructure Requirements](#infrastructure-requirements)
+      + [Task Definition Directions](#task-definition-directions)
+   * [ECS Service Setup](#ecs-service-setup)
+      + [ECS Cluster Security Group](#ecs-cluster-security-group)
+      + [Load Balancer Settings](#load-balancer-settings)
+      + [Service Configuration](#service-configuration)
+      + [Environment](#environment)
+      + [Deployment Configuration](#deployment-configuration)
+         - [Networking](#networking)
+   * [MTE Relay Client-Side Setup](#mte-relay-client-side-setup)
+- [Testing](#testing)
+   * [Troubleshooting](#troubleshooting)
+- [Health Check](#health-check)
+         - [Echo Route](#echo-route)
+- [Routine Maintenance](#routine-maintenance)
+   * [Patches/Updates](#patchesupdates)
+      + [Service Limits](#service-limits)
+      + [Rotation of Secrets](#rotation-of-secrets)
+- [Emergency Maintenance](#emergency-maintenance)
+   * [Handling Fault Conditions](#handling-fault-conditions)
+   * [How to recover the software](#how-to-recover-the-software)
+- [Support](#support)
+
 # Introduction:
 
 The MTE Relay Server is a NodeJS application that decodes and proxies HTTP payloads from client applications encoded by Eclypses MTE Software. The Eclypses MTE is a compiled software library combining quantum-resistant algorithms with proprietary, patented techniques to encode data. A common use case for the MTE is to import Eclypses' client-side NPM package into a web application to encode data-in-transit and the MTE Relay Server to pair, decode, and proxy the request to the intended recipient. The MTE Relay has been used in payment gateways to secure the creation of payments, as a VPN replacement for analytics dashboards, and orchestrated in high available enterprise environments.
@@ -133,7 +191,7 @@ Give your task definition appropriate roles:
 
 - **ecsTaskExecutionRole**
 
-- Note: The task must have access to the ` **AWSMarketplaceMeteringRegisterUsage** ` role.
+- Note: The task must have access to the ` AWSMarketplaceMeteringRegisterUsage ` role.
 
 #### For dependencies:
 
@@ -355,7 +413,7 @@ Once the Relay Server is configured:
     - MTE instantiated successfully.
     - Server listening at http://[0.0.0.0]:8080
 - To test that the API Service is active and running, submit an HTTPGet request to the echo route:
-  - curl 'https://[your\_domain]/api/mte-echo/test' \
+  - curl 'https://[your\_domain]/api/mte-echo/test' 
   - Successful response: {"echo":"test","time"[UTC datetime]}
 - Add "relay-test.eclypses.com" to "CORS" comma-separated environment variable
 - Navigate to the Eclypses testing application at:
