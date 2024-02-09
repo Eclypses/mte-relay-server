@@ -8,6 +8,9 @@ import {
   MteStatus,
   MteArrStatus,
   MteStrStatus,
+  MteKyber,
+  MteKyberStatus,
+  MteKyberStrength,
 } from "mte";
 import { setItem, takeItem } from "./memory-cache";
 import { MteRelayError } from "./errors";
@@ -95,7 +98,6 @@ function returnDecoderToPool(decoder: MteMkeDec | MteDec) {
   return decoder.destruct();
 }
 
-// init MteWasm
 export async function instantiateMteWasm(options: {
   licenseKey: string;
   companyName: string;
@@ -286,7 +288,7 @@ function validateStatusIsSuccess(status: MteStatus, mteBase: MteBase) {
     }
   }
 }
-type EncDec = MteMkeEnc | MteMkeDec | MteEnc | MteDec;
+type EncDec = MteEnc | MteDec | MteMkeEnc | MteMkeDec;
 function restoreMteState(encdec: EncDec, state: string): void {
   const result = encdec.restoreStateB64(state);
   validateStatusIsSuccess(result, encdec);
@@ -308,4 +310,62 @@ function drbgReseedCheck(encoder: EncDec) {
   if (reseedIsRequired) {
     throw new MteRelayError("DRBG reseed is required.");
   }
+}
+
+export function getKyberInitiator() {
+  const initiator = new MteKyber(mteWasm, MteKyberStrength.K512);
+  const keyPair = initiator.createKeypair();
+  if (keyPair.status !== MteKyberStatus.success) {
+    throw new Error("Initiator: Failed to create the key pair.");
+  }
+  const publicKey = u8ToHex(keyPair.result1!);
+
+  function decryptSecret(encryptedSecretHex: string) {
+    const encryptedSecret = hexToU8(encryptedSecretHex);
+    const result = initiator.decryptSecret(encryptedSecret);
+    if (result.status !== MteKyberStatus.success) {
+      throw new Error("Initiator: Failed to decrypt the secret.");
+    }
+    const secret = u8ToHex(result.result1!);
+    return secret;
+  }
+
+  return {
+    publicKey,
+    decryptSecret,
+  };
+}
+
+export function getKyberResponder(publicKeyHex: string) {
+  const publicKey = hexToU8(publicKeyHex);
+  const responder = new MteKyber(mteWasm, MteKyberStrength.K512);
+  const result = responder.createSecret(publicKey);
+  if (result.status !== MteKyberStatus.success) {
+    throw new Error("Responder: Failed to create the key pair.");
+  }
+  // const secret = u8ToHex(result.result1!);
+  const encryptedSecret = u8ToHex(result.result2!);
+
+  return {
+    secret: result.result1!,
+    encryptedSecret,
+  };
+}
+
+function u8ToHex(uint8Array: Uint8Array): string {
+  let hexString = "";
+  for (let i = 0; i < uint8Array.length; i++) {
+    const byteHex = uint8Array[i].toString(16).padStart(2, "0");
+    hexString += byteHex;
+  }
+  return hexString;
+}
+
+function hexToU8(hexString: string): Uint8Array {
+  const uint8Array = new Uint8Array(hexString.length / 2);
+  for (let i = 0; i < hexString.length; i += 2) {
+    const byte = parseInt(hexString.substring(i, i + 2), 16);
+    uint8Array[i / 2] = byte;
+  }
+  return uint8Array;
 }

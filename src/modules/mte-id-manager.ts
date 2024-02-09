@@ -52,6 +52,7 @@ const mteIdManager: FastifyPluginCallback<{
       request.relayOptions = {};
 
       // parse x-mte-relay header from request
+      request.relayOptions = {}; // todo: request.relayOptions is holding onto data from previous request. find out why.
       const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
       if (mteRelayHeader) {
         request.relayOptions = parseMteRelayHeader(mteRelayHeader);

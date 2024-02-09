@@ -1,17 +1,14 @@
 import { FastifyPluginCallback } from "fastify";
 import { z } from "zod";
-import { getEcdh } from "../utils/ecdh";
-import { instantiateEncoder, instantiateDecoder } from "./mte";
+import {
+  instantiateEncoder,
+  instantiateDecoder,
+  getKyberResponder,
+} from "./mte";
 import { getNonce } from "../utils/nonce";
 import { MteRelayError } from "./mte/errors";
 import mteIdManager from "./mte-id-manager";
 
-const mtePairSchema = z.object({
-  encoderPublicKey: z.string(),
-  encoderPersonalizationStr: z.string(),
-  decoderPublicKey: z.string(),
-  decoderPersonalizationStr: z.string(),
-});
 const mtePairArraySchema = z.array(
   z.object({
     pairId: z.string(),
@@ -21,7 +18,6 @@ const mtePairArraySchema = z.array(
     decoderPersonalizationStr: z.string(),
   })
 );
-const bodySchema = z.union([mtePairSchema, mtePairArraySchema]);
 
 /**
  * Protect API Routes that require x-mte-id header
@@ -48,7 +44,7 @@ export const mtePairRoutes: FastifyPluginCallback<{
       reply.header(options.mteRelayHeader, request.clientIdSigned);
 
       // validate request body
-      const validationResult = bodySchema.safeParse(request.body);
+      const validationResult = mtePairArraySchema.safeParse(request.body);
       if (!validationResult.success) {
         request.log.error(validationResult.error);
         return reply
@@ -56,82 +52,40 @@ export const mtePairRoutes: FastifyPluginCallback<{
           .send(JSON.stringify(validationResult.error, null, 2));
       }
 
-      if (Array.isArray(validationResult.data)) {
-        const returnInitValues = [];
-        // create encoders and decoders
-        for (const pair of validationResult.data) {
-          // create encoder
-          const encoderNonce = getNonce();
-          const encoderEcdh = getEcdh();
-          const encoderEntropy = encoderEcdh.computeSharedSecret(
-            pair.decoderPublicKey
-          );
-          instantiateEncoder({
-            id: `encoder.${request.relayOptions.clientId}.${pair.pairId}`,
-            entropy: encoderEntropy,
-            nonce: encoderNonce,
-            personalization: pair.decoderPersonalizationStr,
-          });
+      const returnInitValues = [];
+      // create encoders and decoders
+      for (const pair of validationResult.data) {
+        // create encoder
+        const encoderNonce = getNonce();
+        const encoderKyber = getKyberResponder(pair.decoderPublicKey);
+        instantiateEncoder({
+          id: `encoder.${request.relayOptions.clientId}.${pair.pairId}`,
+          entropy: encoderKyber.secret,
+          nonce: encoderNonce,
+          personalization: pair.decoderPersonalizationStr,
+        });
 
-          // create decoder
-          const decoderNonce = getNonce();
-          const decoderEcdh = getEcdh();
-          const decoderEntropy = decoderEcdh.computeSharedSecret(
-            pair.encoderPublicKey
-          );
-          instantiateDecoder({
-            id: `decoder.${request.relayOptions.clientId}.${pair.pairId}`,
-            entropy: decoderEntropy,
-            nonce: decoderNonce,
-            personalization: pair.encoderPersonalizationStr,
-          });
+        // create decoder
+        const decoderNonce = getNonce();
+        const decoderKyber = getKyberResponder(pair.encoderPublicKey);
+        instantiateDecoder({
+          id: `decoder.${request.relayOptions.clientId}.${pair.pairId}`,
+          entropy: decoderKyber.secret,
+          nonce: decoderNonce,
+          personalization: pair.encoderPersonalizationStr,
+        });
 
-          returnInitValues.push({
-            pairId: pair.pairId,
-            encoderNonce,
-            encoderPublicKey: encoderEcdh.publicKey,
-            decoderNonce,
-            decoderPublicKey: decoderEcdh.publicKey,
-          });
-        }
-
-        // send response
-        return reply.status(200).send(returnInitValues);
+        returnInitValues.push({
+          pairId: pair.pairId,
+          encoderNonce,
+          encoderSecret: encoderKyber.encryptedSecret,
+          decoderNonce,
+          decoderSecret: decoderKyber.encryptedSecret,
+        });
       }
 
-      // create encoder
-      const encoderNonce = getNonce();
-      const encoderEcdh = getEcdh();
-      const encoderEntropy = encoderEcdh.computeSharedSecret(
-        validationResult.data.decoderPublicKey
-      );
-      instantiateEncoder({
-        id: `encoder.${request.relayOptions.clientId}.${request.relayOptions.pairId}`,
-        entropy: encoderEntropy,
-        nonce: encoderNonce,
-        personalization: validationResult.data.decoderPersonalizationStr,
-      });
-
-      // create decoder
-      const decoderNonce = getNonce();
-      const decoderEcdh = getEcdh();
-      const decoderEntropy = decoderEcdh.computeSharedSecret(
-        validationResult.data.encoderPublicKey
-      );
-      instantiateDecoder({
-        id: `decoder.${request.relayOptions.clientId}.${request.relayOptions.pairId}`,
-        entropy: decoderEntropy,
-        nonce: decoderNonce,
-        personalization: validationResult.data.encoderPersonalizationStr,
-      });
-
       // send response
-      reply.status(200).send({
-        encoderNonce,
-        encoderPublicKey: encoderEcdh.publicKey,
-        decoderNonce,
-        decoderPublicKey: decoderEcdh.publicKey,
-      });
+      return reply.status(200).send(returnInitValues);
     } catch (error) {
       request.log.error(error);
       if (error instanceof MteRelayError) {
@@ -148,14 +102,5 @@ export const mtePairRoutes: FastifyPluginCallback<{
     }
   });
 
-  done();
-};
-
-/**
- * Public API Routes
- */
-export const anonymousApiRoutes: FastifyPluginCallback<{
-  mteRelayHeader: string;
-}> = (fastify, options, done) => {
   done();
 };
