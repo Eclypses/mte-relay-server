@@ -13,8 +13,8 @@ const passThroughRoutes: FastifyPluginCallback<{
   fastify.removeAllContentTypeParsers();
 
   // all requests, handle incoming body as stream
-  fastify.addContentTypeParser("*", function (_request, payload, done) {
-    done(null);
+  fastify.addContentTypeParser("*", function (_request, _payload, _done) {
+    _done(null);
   });
 
   options.routes.forEach((route) => {
@@ -32,13 +32,14 @@ const passThroughRoutes: FastifyPluginCallback<{
           data: request.raw,
           maxRedirects: 0,
           responseType: "stream",
-          validateStatus: (status) => status < 400
+          validateStatus: (status) => status < 400,
         });
 
         delete proxyResponse.headers["access-control-allow-origin"];
         delete proxyResponse.headers["access-control-allow-methods"];
         delete proxyResponse.headers["transfer-encoding"];
 
+        // @ts-ignore - this is fine.
         reply.headers(proxyResponse.headers);
         reply.status(proxyResponse.status);
 
