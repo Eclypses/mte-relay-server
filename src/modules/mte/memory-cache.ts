@@ -20,7 +20,7 @@ export async function setItem(id: string, value: string) {
  */
 export async function takeItem(id: string): Promise<string | null> {
   const item = store.get(id);
-  if (!id.includes("decoder")) {
+  if (id.includes("encoder")) {
     store.delete(id);
   }
   return item;

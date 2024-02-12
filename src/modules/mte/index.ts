@@ -302,11 +302,11 @@ function getMteState(encoder: EncDec) {
 }
 function drbgReseedCheck(encoder: EncDec) {
   const drbg = encoder.getDrbg();
-  const threshhold = Number(
+  const threshold = Number(
     String(encoder.getDrbgsReseedInterval(drbg)).substring(0, 15)
   );
   const counter = Number(String(encoder.getReseedCounter()).substring(0, 15));
-  const reseedIsRequired = counter / threshhold > 0.9;
+  const reseedIsRequired = counter / threshold > 0.9;
   if (reseedIsRequired) {
     throw new MteRelayError("DRBG reseed is required.");
   }

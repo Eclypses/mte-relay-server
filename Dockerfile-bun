@@ -7,8 +7,8 @@ COPY ./package.json .
 COPY ./.npmrc .
 RUN npm install mte@npm:@eclypses/tblackman-llc-mte-relay-demo-sales-demo-mte-relay
 
+# Stage 2 - Runtime
 FROM oven/bun:alpine as runtime
-
 WORKDIR /app
 COPY --from=installer /app/node_modules .
 COPY ./package.json .

@@ -29,10 +29,16 @@ function proxyHandler(
   fastify.register(mteIdManager, {
     mteRelayHeader: options.mteRelayHeader,
     clientIdSecret: options.clientIdSecret,
+    outboundToken: options.outboundToken,
   });
 
   // log mte usage
-  fastify.addHook("onRequest", async (request, reply) => {
+  fastify.addHook("onRequest", (request, reply, _done) => {
+    if (request.isOutbound) {
+      // do we log outbound requests?
+      return _done();
+    }
+
     if (!request.relayOptions.clientId) {
       request.log.error(`Missing clientID header.`);
       return reply.status(401).send("Unauthorized");
@@ -81,13 +87,25 @@ function proxyHandler(
   // handler function
   async function handler(request: FastifyRequest, reply: FastifyReply) {
     try {
-      // determine if authorized outbound-proxy, or if inbound-proxy
-      if (options.outboundToken) {
-        // get bearer token from request
-        const bearerToken = request.headers.authorization?.split(" ")[1];
-        if (bearerToken && bearerToken !== options.outboundToken) {
-          return reply.status(401).send("Unauthorized");
+      // determine if authorized outbound-proxy, ELSE if inbound-proxy
+      if (request.isOutbound) {
+        const upstream = request.headers["x-mte-upstream"] as string;
+        if (!upstream) {
+          return reply.status(400).send("Missing x-mte-upstream header.");
         }
+        const _request = new Request(upstream + request.url, {
+          method: request.method,
+          // @ts-ignore - this is fine, i think
+          headers: request.headers,
+          body: request.body as unknown as ReadableStream<Uint8Array>,
+        });
+        const response = await fetch(_request);
+        const _response = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+        return _response;
       }
 
       const itemsToDecode: {
@@ -135,11 +153,18 @@ function proxyHandler(
         result.shift();
       }
 
-      // create new headers
+      // delete few headers we don't want to forward
+      delete request.headers[options.mteRelayHeader];
+      delete request.headers["content-length"];
+      delete request.headers["transfer-encoding"];
+      delete request.headers["content-type"];
+      delete request.headers["Content-Type"];
+      delete request.headers[options.encodedHeadersHeader];
+      delete request.headers["host"];
+      delete request.headers["cache-control"];
+
+      // create new request headers
       const proxyHeaders = cloneHeaders(request.headers);
-      delete proxyHeaders[options.encodedHeadersHeader];
-      delete proxyHeaders[options.mteRelayHeader];
-      delete proxyHeaders["content-length"];
       proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
       proxyHeaders["cache-control"] = "no-cache";
 

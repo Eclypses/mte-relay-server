@@ -10,6 +10,7 @@ declare module "fastify" {
   interface FastifyRequest {
     relayOptions: RelayOptions;
     clientIdSigned: string;
+    isOutbound: boolean;
   }
 }
 
@@ -24,13 +25,32 @@ declare module "fastify" {
 const mteIdManager: FastifyPluginCallback<{
   clientIdSecret: string;
   mteRelayHeader: string;
+  outboundToken?: string;
 }> = (fastify, options, done) => {
   // set default object for request.relayOptions
   fastify.decorateRequest("relayOptions", {});
+  fastify.decorateRequest("outbound", false);
 
   // on every request
   fastify.addHook("onRequest", (request, reply, _done) => {
     try {
+      // outbound requests
+      if (options.outboundToken) {
+        request.isOutbound = false;
+        const outboundToken = request.headers["x-mte-outbound-token"] as string;
+        if (outboundToken) {
+          if (outboundToken !== options.outboundToken) {
+            return reply.status(401).send("Invalid outbound token.");
+          } else {
+            request.isOutbound = true;
+            return _done();
+          }
+        }
+      }
+
+      // default to empty object
+      request.relayOptions = {};
+
       // parse x-mte-relay header from request
       request.relayOptions = {}; // todo: request.relayOptions is holding onto data from previous request. find out why.
       const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
