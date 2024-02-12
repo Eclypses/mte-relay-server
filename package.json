@@ -1,8 +1,9 @@
 {
   "name": "mte-relay-server",
-  "version": "3.4.2",
+  "version": "3.4.3",
   "description": "",
   "scripts": {
+    "start": "node --trace-warnings dist/index.js --log-adapter ../examples/log-adapters/stdout.js",
     "dev": "nodemon --watch src src/index.ts -- --log-adapter ../../examples/log-adapters/stdout.js",
     "dev:custom": "nodemon src/index.ts --settings C:\\Users\\Trevor\\Eclypses\\Eclypses\\mte-relay-development\\mte-relay-server\\mte-relay-config.js",
     "debug": "nodemon --exec \"node --inspect=0.0.0.0:9229 --require ts-node/register src/index.ts\"",

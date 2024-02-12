@@ -1,4 +1,9 @@
-import { FastifyRequest, FastifyInstance, FastifyReply, HTTPMethods } from "fastify";
+import {
+  FastifyRequest,
+  FastifyInstance,
+  FastifyReply,
+  HTTPMethods,
+} from "fastify";
 import { mkeDecode, mkeEncode } from "./mte";
 import multipart from "@fastify/multipart";
 import FormData from "form-data";
@@ -27,13 +32,15 @@ function proxyHandler(
   done: any
 ) {
   // log mte usage
-  fastify.addHook("onRequest", async (request, reply) => {
+  fastify.addHook("onRequest", (request, reply, _done) => {
     if (!request.clientId) {
       request.log.error(`Missing ${options.clientIdHeader} header.`);
       return reply.status(401).send("Unauthorized");
     }
     if (!request.pairId) {
-      const err = new MteRelayError("PairID Header (or sessionID) is required, but not found.");
+      const err = new MteRelayError(
+        "PairID Header (or sessionID) is required, but not found."
+      );
       request.log.error(err.message);
       return reply.status(err.status).send(err.message);
     }
@@ -45,6 +52,7 @@ function proxyHandler(
       },
       `MTE Proxy Route used: ${request.url}`
     );
+    _done();
   });
 
   // parse multipart/form-data requests
@@ -55,20 +63,22 @@ function proxyHandler(
   });
 
   // if not multipart/form-data, put entire buffer on request.body, and handle decode in handler
-  fastify.addContentTypeParser("*", function (_request, payload, done) {
+  fastify.addContentTypeParser("*", function (_request, payload, _done) {
     // parse data
     let _buffer = new Uint8Array(0);
     payload.on("data", (chunk: Uint8Array) => {
       _buffer = concatTwoUint8Arrays(_buffer, chunk);
     });
     payload.on("end", async () => {
-      done(null, _buffer.length > 0 ? _buffer : undefined);
+      _done(null, _buffer.length > 0 ? _buffer : undefined);
     });
   });
 
   // remove OPTIONS from httpMethods, they are not needed for server-to-server proxy
   const disallowedMethods = ["OPTIONS", "HEAD"];
-  const methods = options.httpMethods.filter((method) => !disallowedMethods.includes(method));
+  const methods = options.httpMethods.filter(
+    (method) => !disallowedMethods.includes(method)
+  );
 
   // support white-listed MTE routes, or default all routes to MTE proxy
   if (options.routes) {
@@ -113,7 +123,9 @@ function proxyHandler(
 
       // decoded headers
       let mkeDecodedHeaders: Record<string, string> = {};
-      const encodedHeaders = request.headers[options.encodedHeadersHeader] as string;
+      const encodedHeaders = request.headers[
+        options.encodedHeadersHeader
+      ] as string;
       if (encodedHeaders) {
         const decodedHeaders = await mkeDecode(encodedHeaders, {
           stateId: `decoder.${request.clientId}.${request.pairId}`,
@@ -239,7 +251,8 @@ function proxyHandler(
        */
       if (Boolean(request.body) && !isMultipart) {
         // decode incoming payload
-        const contentType = request.headers["content-type"] || "application/json";
+        const contentType =
+          request.headers["content-type"] || "application/json";
         let decodedPayload: any = request.body;
         if (request.body) {
           decodedPayload = await mkeDecode(request.body as any, {
@@ -291,7 +304,9 @@ function proxyHandler(
         return reply.status(500).send("No Response.");
       }
 
-      request.log.debug(`Proxy Response Headers - Original:\n${proxyResponse.headers}`);
+      request.log.debug(
+        `Proxy Response Headers - Original:\n${proxyResponse.headers}`
+      );
 
       // create response headers
       proxyResponse.headers["access-control-allow-credentials"] = "true";
@@ -309,7 +324,8 @@ function proxyHandler(
         if (replyHeader) {
           value.push(makeHeaderAString(replyHeader));
         }
-        const proxyResponseHeader = proxyResponse.headers["access-control-allow-headers"];
+        const proxyResponseHeader =
+          proxyResponse.headers["access-control-allow-headers"];
         if (proxyResponseHeader) {
           value.push(makeHeaderAString(proxyResponseHeader));
         }
@@ -321,7 +337,8 @@ function proxyHandler(
         if (replyHeader) {
           value.push(makeHeaderAString(replyHeader));
         }
-        const proxyResponseHeader = proxyResponse.headers["access-control-expose-headers"];
+        const proxyResponseHeader =
+          proxyResponse.headers["access-control-expose-headers"];
         if (proxyResponseHeader) {
           value.push(makeHeaderAString(proxyResponseHeader));
         }
@@ -339,7 +356,9 @@ function proxyHandler(
         ] as unknown as string;
       }
 
-      request.log.debug(`Proxy Response Headers - Modified:\n${proxyResponse.headers}`);
+      request.log.debug(
+        `Proxy Response Headers - Modified:\n${proxyResponse.headers}`
+      );
 
       // encode headers
       const headersToEncode: Record<string, string> = {};
@@ -358,7 +377,8 @@ function proxyHandler(
       }).catch((err) => {
         throw new MteRelayError("Failed to encode.", err);
       });
-      proxyResponseHeaders[options.encodedHeadersHeader] = encodedResponseHeaders as string;
+      proxyResponseHeaders[options.encodedHeadersHeader] =
+        encodedResponseHeaders as string;
 
       // copy proxyResponse headers to reply
       reply.headers(proxyResponseHeaders);

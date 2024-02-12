@@ -12,12 +12,12 @@ export const protectedApiRoutes: FastifyPluginCallback<{
   clientIdHeader: string;
 }> = (fastify, options, done) => {
   // on every request
-  fastify.addHook("onRequest", (request, reply, done) => {
+  fastify.addHook("onRequest", (request, reply, _done) => {
     if (!request.clientId) {
       request.log.error(`Missing ${options.clientIdHeader} header.`);
       return reply.code(400).send(`Missing ${options.clientIdHeader} header.`);
     }
-    done();
+    _done();
   });
 
   // mte pair route
@@ -160,7 +160,7 @@ export const anonymousApiRoutes: FastifyPluginCallback<{}> = (
     });
   });
 
-  fastify.get("/api/mte-errors", (request, reply) => {
+  fastify.get("/api/mte-errors", (_request, reply) => {
     reply.send(MTE_ERRORS);
   });
 
