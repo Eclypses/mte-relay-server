@@ -336,8 +336,8 @@ export function getKyberInitiator() {
   };
 }
 
-export function getKyberResponder(publicKeyHex: string) {
-  const publicKey = B64ToU8(publicKeyHex);
+export function getKyberResponder(b64String: string) {
+  const publicKey = B64ToU8(b64String);
   const responder = new MteKyber(mteWasm, MteKyberStrength.K512);
   const result = responder.createSecret(publicKey);
   if (result.status !== MteKyberStatus.success) {
