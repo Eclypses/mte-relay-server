@@ -318,15 +318,15 @@ export function getKyberInitiator() {
   if (keyPair.status !== MteKyberStatus.success) {
     throw new Error("Initiator: Failed to create the key pair.");
   }
-  const publicKey = u8ToHex(keyPair.result1!);
+  const publicKey = u8ToB64(keyPair.result1!);
 
   function decryptSecret(encryptedSecretHex: string) {
-    const encryptedSecret = hexToU8(encryptedSecretHex);
+    const encryptedSecret = B64ToU8(encryptedSecretHex);
     const result = initiator.decryptSecret(encryptedSecret);
     if (result.status !== MteKyberStatus.success) {
       throw new Error("Initiator: Failed to decrypt the secret.");
     }
-    const secret = u8ToHex(result.result1!);
+    const secret = u8ToB64(result.result1!);
     return secret;
   }
 
@@ -337,14 +337,14 @@ export function getKyberInitiator() {
 }
 
 export function getKyberResponder(publicKeyHex: string) {
-  const publicKey = hexToU8(publicKeyHex);
+  const publicKey = B64ToU8(publicKeyHex);
   const responder = new MteKyber(mteWasm, MteKyberStrength.K512);
   const result = responder.createSecret(publicKey);
   if (result.status !== MteKyberStatus.success) {
     throw new Error("Responder: Failed to create the key pair.");
   }
   // const secret = u8ToHex(result.result1!);
-  const encryptedSecret = u8ToHex(result.result2!);
+  const encryptedSecret = u8ToB64(result.result2!);
 
   return {
     secret: result.result1!,
@@ -352,20 +352,10 @@ export function getKyberResponder(publicKeyHex: string) {
   };
 }
 
-function u8ToHex(uint8Array: Uint8Array): string {
-  let hexString = "";
-  for (let i = 0; i < uint8Array.length; i++) {
-    const byteHex = uint8Array[i].toString(16).padStart(2, "0");
-    hexString += byteHex;
-  }
-  return hexString;
+function u8ToB64(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64");
 }
 
-function hexToU8(hexString: string): Uint8Array {
-  const uint8Array = new Uint8Array(hexString.length / 2);
-  for (let i = 0; i < hexString.length; i += 2) {
-    const byte = parseInt(hexString.substring(i, i + 2), 16);
-    uint8Array[i / 2] = byte;
-  }
-  return uint8Array;
+function B64ToU8(base64: string): Uint8Array {
+  return new Uint8Array(Buffer.from(base64, "base64"));
 }

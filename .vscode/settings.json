@@ -1,3 +1,11 @@
 {
-  "cSpell.words": ["drbg", "Drbgs", "fastify", "fromdefault", "uninstantiate"]
+  "cSpell.words": [
+    "drbg",
+    "Drbgs",
+    "encdec",
+    "fastify",
+    "fromdefault",
+    "Keypair",
+    "uninstantiate"
+  ]
 }
