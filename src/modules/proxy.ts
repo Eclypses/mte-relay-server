@@ -58,6 +58,7 @@ function proxyHandler(
     );
     const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
     reply.header(options.mteRelayHeader, mteRelayHeader);
+    _done();
   });
 
   // for all content-types, forward incoming stream
