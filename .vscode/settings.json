@@ -6,6 +6,7 @@
     "fastify",
     "fromdefault",
     "Keypair",
-    "uninstantiate"
+    "uninstantiate",
+    "Fargate"
   ]
 }
