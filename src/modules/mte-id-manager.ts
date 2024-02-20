@@ -28,7 +28,7 @@ const mteIdManager: FastifyPluginCallback<{
   outboundToken?: string;
 }> = (fastify, options, done) => {
   // set default object for request.relayOptions
-  fastify.decorateRequest("relayOptions", {});
+  fastify.decorateRequest("relayOptions", null);
   fastify.decorateRequest("outbound", false);
 
   // on every request
@@ -52,7 +52,6 @@ const mteIdManager: FastifyPluginCallback<{
       request.relayOptions = {};
 
       // parse x-mte-relay header from request
-      request.relayOptions = {}; // todo: request.relayOptions is holding onto data from previous request. find out why.
       const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
       if (mteRelayHeader) {
         request.relayOptions = parseMteRelayHeader(mteRelayHeader);
