@@ -164,9 +164,16 @@ export async function encode(options: {
   type: EncDecTypes;
   items: {
     data: string | Uint8Array;
-    output: "B64" | "Uint8Array";
+    output: "B64" | "Uint8Array" | "stream";
   }[];
 }) {
+  if (options.type === "MTE") {
+    const hasStream = options.items.some((item) => item.output === "stream");
+    if (hasStream) {
+      throw new Error("MTE does not support streaming. Use MKE instead.");
+    }
+  }
+
   const currentState = await cache.takeState(options.id);
   if (!currentState) {
     throw new MteRelayError("State not found.", {
@@ -188,9 +195,32 @@ export async function encode(options: {
     await cache.saveState(options.id, nextState);
     restoreMteState(encoder, currentState);
   }
-  let encodeResults: (String | Uint8Array)[] = [];
+  let encodeResults: (
+    | String
+    | Uint8Array
+    | {
+        encryptChunk: (data: Uint8Array) => Uint8Array | null;
+        finishEncrypt: () => Uint8Array;
+      }
+  )[] = [];
+  let isCheckedOutForStreaming = false;
   try {
     for (const item of options.items) {
+      if (item.output === "stream") {
+        isCheckedOutForStreaming = true;
+        (encoder as MteMkeEnc).startEncrypt();
+        function finishEncrypt() {
+          const result = (encoder as MteMkeEnc).finishEncrypt();
+          validateStatusIsSuccess(result.status, encoder);
+          returnEncoderToPool(encoder);
+          return result.arr!;
+        }
+        encodeResults.push({
+          encryptChunk: (encoder as MteMkeEnc).encryptChunk,
+          finishEncrypt,
+        });
+        continue;
+      }
       let encodeResult: MteArrStatus | MteStrStatus;
       if (item.data instanceof Uint8Array) {
         if (item.output === "Uint8Array") {
@@ -219,9 +249,11 @@ export async function encode(options: {
   }
   if (options.type === "MTE") {
     const state = getMteState(encoder);
-    await cache.saveState(options.id, state);
+    cache.saveState(options.id, state);
   }
-  returnEncoderToPool(encoder);
+  if (!isCheckedOutForStreaming) {
+    returnEncoderToPool(encoder);
+  }
   return encodeResults;
 }
 export async function decode(options: {
@@ -229,9 +261,15 @@ export async function decode(options: {
   type: EncDecTypes;
   items: {
     data: string | Uint8Array;
-    output: "str" | "Uint8Array";
+    output: "str" | "Uint8Array" | "stream";
   }[];
 }) {
+  if (options.type === "MTE") {
+    const hasStream = options.items.some((data) => data.output === "stream");
+    if (hasStream) {
+      throw new Error("MTE does not support streaming. Use MKE instead.");
+    }
+  }
   const currentState = await cache.takeState(options.id);
   if (!currentState) {
     throw new MteRelayError("State not found.", {
@@ -241,9 +279,34 @@ export async function decode(options: {
   const decoder = getDecoderFromPool(options.type);
   restoreMteState(decoder, currentState);
   drbgReseedCheck(decoder);
-  const decodeResults: (String | Uint8Array)[] = [];
+  const decodeResults: (
+    | String
+    | Uint8Array
+    | {
+        decryptChunk: (data: Uint8Array) => Uint8Array | null;
+        finishDecrypt: () => Uint8Array;
+      }
+  )[] = [];
+  let isCheckedOutForStreaming = false;
   try {
     for (const item of options.items) {
+      if (item.output === "stream") {
+        isCheckedOutForStreaming = true;
+        (decoder as MteMkeDec).startDecrypt();
+        function finishDecrypt() {
+          const result = (decoder as MteMkeDec).finishDecrypt();
+          validateStatusIsSuccess(result.status, decoder);
+          const state = getMteState(decoder);
+          cache.saveState(options.id, state);
+          returnDecoderToPool(decoder);
+          return result.arr!;
+        }
+        decodeResults.push({
+          decryptChunk: (decoder as MteMkeDec).decryptChunk,
+          finishDecrypt,
+        });
+        continue;
+      }
       let decodeResult: MteArrStatus | MteStrStatus;
       if (item.data instanceof Uint8Array) {
         if (item.output === "Uint8Array") {
@@ -270,9 +333,11 @@ export async function decode(options: {
       error: (error as Error).message,
     });
   }
-  const state = getMteState(decoder);
-  returnDecoderToPool(decoder);
-  await cache.saveState(options.id, state);
+  if (!isCheckedOutForStreaming) {
+    const state = getMteState(decoder);
+    returnDecoderToPool(decoder);
+    cache.saveState(options.id, state);
+  }
   return decodeResults;
 }
 function validateStatusIsSuccess(status: MteStatus, mteBase: MteBase) {
