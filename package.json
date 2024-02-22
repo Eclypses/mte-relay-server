@@ -1,8 +1,9 @@
 {
   "name": "mte-relay-server",
-  "version": "4.0.0-beta.1",
+  "version": "4.0.0-beta.3",
   "description": "",
   "scripts": {
+    "start": "node --trace-warnings dist/index.js --log-adapter ../examples/log-adapters/stdout.js",
     "dev": "nodemon --watch src src/index.ts -- --log-adapter ../../examples/log-adapters/stdout.js",
     "dev:custom": "nodemon src/index.ts --settings C:\\Users\\Trevor\\Eclypses\\Eclypses\\mte-relay-development\\mte-relay-server\\mte-relay-config.js",
     "debug": "nodemon --exec \"node --inspect=0.0.0.0:9229 --require ts-node/register src/index.ts\"",
@@ -19,23 +20,25 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@fastify/cors": "^8.2.0",
+    "@fastify/cors": "^8.5.0",
+    "@fastify/static": "^7.0.1",
     "fastify": "^4.26.0",
     "fastify-plugin": "^4.5.1",
     "yaml": "^2.3.1",
     "zod": "^3.21.4"
   },
   "peerDependencies": {
-    "mte": "^4.0.0"
+    "mte": ">=3.0.0 <5.0.0"
   },
   "devDependencies": {
     "@autotelic/pino-seq-transport": "^0.1.0",
     "@aws-sdk/client-cloudwatch-logs": "^3.405.0",
+    "@aws-sdk/client-marketplace-metering": "^3.470.0",
     "@serdnam/pino-cloudwatch-transport": "^1.0.4",
     "dotenv": "^16.3.1",
     "esbuild": "0.17.11",
     "memcached": "^2.2.2",
-    "nodemon": "^3.0.1",
+    "nodemon": "^3.0.2",
     "pino-datadog-transport": "^1.3.0",
     "pino-pretty": "^10.0.1",
     "redis": "^4.6.7",

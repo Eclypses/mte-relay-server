@@ -164,9 +164,16 @@ export async function encode(options: {
   type: EncDecTypes;
   items: {
     data: string | Uint8Array;
-    output: "B64" | "Uint8Array";
+    output: "B64" | "Uint8Array" | "stream";
   }[];
 }) {
+  if (options.type === "MTE") {
+    const hasStream = options.items.some((item) => item.output === "stream");
+    if (hasStream) {
+      throw new Error("MTE does not support streaming. Use MKE instead.");
+    }
+  }
+
   const currentState = await cache.takeState(options.id);
   if (!currentState) {
     throw new MteRelayError("State not found.", {
@@ -188,9 +195,32 @@ export async function encode(options: {
     await cache.saveState(options.id, nextState);
     restoreMteState(encoder, currentState);
   }
-  let encodeResults: (String | Uint8Array)[] = [];
+  let encodeResults: (
+    | String
+    | Uint8Array
+    | {
+        encryptChunk: (data: Uint8Array) => Uint8Array | null;
+        finishEncrypt: () => Uint8Array;
+      }
+  )[] = [];
+  let isCheckedOutForStreaming = false;
   try {
     for (const item of options.items) {
+      if (item.output === "stream") {
+        isCheckedOutForStreaming = true;
+        (encoder as MteMkeEnc).startEncrypt();
+        function finishEncrypt() {
+          const result = (encoder as MteMkeEnc).finishEncrypt();
+          validateStatusIsSuccess(result.status, encoder);
+          returnEncoderToPool(encoder);
+          return result.arr!;
+        }
+        encodeResults.push({
+          encryptChunk: (encoder as MteMkeEnc).encryptChunk,
+          finishEncrypt,
+        });
+        continue;
+      }
       let encodeResult: MteArrStatus | MteStrStatus;
       if (item.data instanceof Uint8Array) {
         if (item.output === "Uint8Array") {
@@ -219,9 +249,11 @@ export async function encode(options: {
   }
   if (options.type === "MTE") {
     const state = getMteState(encoder);
-    await cache.saveState(options.id, state);
+    cache.saveState(options.id, state);
   }
-  returnEncoderToPool(encoder);
+  if (!isCheckedOutForStreaming) {
+    returnEncoderToPool(encoder);
+  }
   return encodeResults;
 }
 export async function decode(options: {
@@ -229,9 +261,15 @@ export async function decode(options: {
   type: EncDecTypes;
   items: {
     data: string | Uint8Array;
-    output: "str" | "Uint8Array";
+    output: "str" | "Uint8Array" | "stream";
   }[];
 }) {
+  if (options.type === "MTE") {
+    const hasStream = options.items.some((data) => data.output === "stream");
+    if (hasStream) {
+      throw new Error("MTE does not support streaming. Use MKE instead.");
+    }
+  }
   const currentState = await cache.takeState(options.id);
   if (!currentState) {
     throw new MteRelayError("State not found.", {
@@ -241,9 +279,34 @@ export async function decode(options: {
   const decoder = getDecoderFromPool(options.type);
   restoreMteState(decoder, currentState);
   drbgReseedCheck(decoder);
-  const decodeResults: (String | Uint8Array)[] = [];
+  const decodeResults: (
+    | String
+    | Uint8Array
+    | {
+        decryptChunk: (data: Uint8Array) => Uint8Array | null;
+        finishDecrypt: () => Uint8Array;
+      }
+  )[] = [];
+  let isCheckedOutForStreaming = false;
   try {
     for (const item of options.items) {
+      if (item.output === "stream") {
+        isCheckedOutForStreaming = true;
+        (decoder as MteMkeDec).startDecrypt();
+        function finishDecrypt() {
+          const result = (decoder as MteMkeDec).finishDecrypt();
+          validateStatusIsSuccess(result.status, decoder);
+          const state = getMteState(decoder);
+          cache.saveState(options.id, state);
+          returnDecoderToPool(decoder);
+          return result.arr!;
+        }
+        decodeResults.push({
+          decryptChunk: (decoder as MteMkeDec).decryptChunk,
+          finishDecrypt,
+        });
+        continue;
+      }
       let decodeResult: MteArrStatus | MteStrStatus;
       if (item.data instanceof Uint8Array) {
         if (item.output === "Uint8Array") {
@@ -270,9 +333,11 @@ export async function decode(options: {
       error: (error as Error).message,
     });
   }
-  const state = getMteState(decoder);
-  returnDecoderToPool(decoder);
-  await cache.saveState(options.id, state);
+  if (!isCheckedOutForStreaming) {
+    const state = getMteState(decoder);
+    returnDecoderToPool(decoder);
+    cache.saveState(options.id, state);
+  }
   return decodeResults;
 }
 function validateStatusIsSuccess(status: MteStatus, mteBase: MteBase) {
@@ -302,11 +367,11 @@ function getMteState(encoder: EncDec) {
 }
 function drbgReseedCheck(encoder: EncDec) {
   const drbg = encoder.getDrbg();
-  const threshhold = Number(
+  const threshold = Number(
     String(encoder.getDrbgsReseedInterval(drbg)).substring(0, 15)
   );
   const counter = Number(String(encoder.getReseedCounter()).substring(0, 15));
-  const reseedIsRequired = counter / threshhold > 0.9;
+  const reseedIsRequired = counter / threshold > 0.9;
   if (reseedIsRequired) {
     throw new MteRelayError("DRBG reseed is required.");
   }
@@ -318,15 +383,15 @@ export function getKyberInitiator() {
   if (keyPair.status !== MteKyberStatus.success) {
     throw new Error("Initiator: Failed to create the key pair.");
   }
-  const publicKey = u8ToHex(keyPair.result1!);
+  const publicKey = u8ToB64(keyPair.result1!);
 
   function decryptSecret(encryptedSecretHex: string) {
-    const encryptedSecret = hexToU8(encryptedSecretHex);
+    const encryptedSecret = B64ToU8(encryptedSecretHex);
     const result = initiator.decryptSecret(encryptedSecret);
     if (result.status !== MteKyberStatus.success) {
       throw new Error("Initiator: Failed to decrypt the secret.");
     }
-    const secret = u8ToHex(result.result1!);
+    const secret = u8ToB64(result.result1!);
     return secret;
   }
 
@@ -336,15 +401,15 @@ export function getKyberInitiator() {
   };
 }
 
-export function getKyberResponder(publicKeyHex: string) {
-  const publicKey = hexToU8(publicKeyHex);
+export function getKyberResponder(b64String: string) {
+  const publicKey = B64ToU8(b64String);
   const responder = new MteKyber(mteWasm, MteKyberStrength.K512);
   const result = responder.createSecret(publicKey);
   if (result.status !== MteKyberStatus.success) {
     throw new Error("Responder: Failed to create the key pair.");
   }
   // const secret = u8ToHex(result.result1!);
-  const encryptedSecret = u8ToHex(result.result2!);
+  const encryptedSecret = u8ToB64(result.result2!);
 
   return {
     secret: result.result1!,
@@ -352,20 +417,10 @@ export function getKyberResponder(publicKeyHex: string) {
   };
 }
 
-function u8ToHex(uint8Array: Uint8Array): string {
-  let hexString = "";
-  for (let i = 0; i < uint8Array.length; i++) {
-    const byteHex = uint8Array[i].toString(16).padStart(2, "0");
-    hexString += byteHex;
-  }
-  return hexString;
+function u8ToB64(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64");
 }
 
-function hexToU8(hexString: string): Uint8Array {
-  const uint8Array = new Uint8Array(hexString.length / 2);
-  for (let i = 0; i < hexString.length; i += 2) {
-    const byte = parseInt(hexString.substring(i, i + 2), 16);
-    uint8Array[i / 2] = byte;
-  }
-  return uint8Array;
+function B64ToU8(base64: string): Uint8Array {
+  return new Uint8Array(Buffer.from(base64, "base64"));
 }

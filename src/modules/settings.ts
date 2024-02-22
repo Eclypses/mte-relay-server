@@ -6,6 +6,9 @@ import { z } from "zod";
 // where to store sqlite3 db, and tmp/
 const persistentDir = path.join(process.cwd(), "data");
 
+// public dir for static assets
+const publicDir = path.join(process.cwd(), "public");
+
 // default settings
 const DEFAULT_OPTIONS = {
   ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
@@ -13,6 +16,7 @@ const DEFAULT_OPTIONS = {
   PORT: 8080,
   DEBUG: false,
   PERSISTENT_DIR: persistentDir,
+  PUBLIC_DIR: publicDir,
   TEMP_DIR_PATH: path.join(persistentDir, "tmp"),
   MAX_POOL_SIZE: 25,
 };

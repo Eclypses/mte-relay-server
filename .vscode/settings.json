@@ -1,3 +1,12 @@
 {
-  "cSpell.words": ["fastify"]
+  "cSpell.words": [
+    "drbg",
+    "Drbgs",
+    "encdec",
+    "fastify",
+    "fromdefault",
+    "Keypair",
+    "uninstantiate",
+    "Fargate"
+  ]
 }

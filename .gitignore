@@ -4,10 +4,11 @@ tmp/
 .npmrc
 db.sqlite3
 mte-relay-config*
-Dockerfile
+Dockerfile-*
 dist/
 docker-compose.yml
 package-lock.json
+pnpm-lock.yaml
 data/
 settings.js
 .env

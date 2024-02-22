@@ -4,7 +4,7 @@ import {
   FastifyReply,
   HTTPMethods,
 } from "fastify";
-import { Readable } from "stream";
+import { Readable, Transform } from "stream";
 import { decode, encode } from "./mte";
 import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
 import { MteRelayError } from "./mte/errors";
@@ -58,6 +58,7 @@ function proxyHandler(
     );
     const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
     reply.header(options.mteRelayHeader, mteRelayHeader);
+    _done();
   });
 
   // for all content-types, forward incoming stream
@@ -110,7 +111,7 @@ function proxyHandler(
 
       const itemsToDecode: {
         data: string | Uint8Array;
-        output: "str" | "Uint8Array";
+        output: "str" | "Uint8Array" | "stream";
       }[] = [];
 
       // get route to decode
@@ -131,12 +132,12 @@ function proxyHandler(
         }
       }
 
-      // encode body
+      // handle body as stream
       if (request.relayOptions.bodyIsEncoded && request.body) {
-        const u8 = await streamToUint8Array(
-          request.body as unknown as Readable
-        );
-        itemsToDecode.push({ data: u8, output: "Uint8Array" });
+        itemsToDecode.push({
+          data: "stream",
+          output: "stream",
+        });
       }
 
       // decode items
@@ -184,8 +185,36 @@ function proxyHandler(
       // decode payload, if present
       let proxyPayload = request.body;
       if (request.relayOptions.bodyIsEncoded) {
-        proxyPayload = result[0];
-        request.log.debug(`Decoded Payload:\n${proxyPayload}`);
+        const returnData = result[0];
+        if ("decryptChunk" in returnData == false) {
+          throw new Error("Return data does not contain decryptChunk");
+        }
+        const { decryptChunk, finishDecrypt } = returnData;
+        proxyPayload = new Transform({
+          transform(chunk, _encoding, callback) {
+            try {
+              const u8 = new Uint8Array(chunk);
+              const decrypted = decryptChunk(u8);
+              if (decrypted === null) {
+                return callback(new Error("Decryption failed."));
+              }
+              this.push(decrypted);
+              callback();
+            } catch (error) {
+              callback(error as Error);
+            }
+          },
+          final(callback) {
+            const data = finishDecrypt();
+            if (data === null) {
+              return callback(new Error("Decryption final failed."));
+            }
+            this.push(data);
+            callback();
+          },
+        });
+
+        (request.body as Readable).pipe(proxyPayload as Transform);
       }
 
       // make new request
@@ -195,6 +224,8 @@ function proxyHandler(
           method: request.method,
           headers: proxyHeaders,
           body: proxyPayload as any,
+          // @ts-ignore
+          duplex: "half",
         });
       } catch (error: any) {
         request.log.error(error);
@@ -279,7 +310,7 @@ function proxyHandler(
       // collect data to be encoded
       const itemsToEncode: {
         data: string | Uint8Array;
-        output: "B64" | "Uint8Array";
+        output: "B64" | "Uint8Array" | "stream";
       }[] = [];
 
       // collect Headers to encode
@@ -300,15 +331,11 @@ function proxyHandler(
         itemsToEncode.push({ data: encodedHeadersJson, output: "B64" });
       }
 
-      // get body to encode
-      const _body = await proxyResponse.arrayBuffer();
-      const hasEncodedBody = _body.byteLength > 0;
-      if (hasEncodedBody) {
-        itemsToEncode.push({
-          data: new Uint8Array(_body),
-          output: "Uint8Array",
-        });
-      }
+      // encode body as stream
+      itemsToEncode.push({
+        data: "stream",
+        output: "stream",
+      });
 
       // encode response
       const results = await encode({
@@ -323,15 +350,6 @@ function proxyHandler(
         results.shift();
       }
 
-      let payload: any = undefined;
-
-      // if body is encoded, update payload
-      if (hasEncodedBody) {
-        payload = results[0];
-        responseHeaders["content-type"] = "application/octet-stream";
-        responseHeaders["content-length"] = payload.length.toString();
-      }
-
       // set relay options header
       const responseRelayOptions: RelayOptions = {
         clientId: request.clientIdSigned,
@@ -339,7 +357,7 @@ function proxyHandler(
         encodeType: request.relayOptions.encodeType,
         urlIsEncoded: false,
         headersAreEncoded: hasEncodedHeaders,
-        bodyIsEncoded: hasEncodedBody,
+        bodyIsEncoded: true,
       };
       const responseRelayOptionsHeader =
         formatMteRelayHeader(responseRelayOptions);
@@ -349,7 +367,39 @@ function proxyHandler(
       reply.status(proxyResponse.status);
       reply.headers(responseHeaders);
 
-      reply.send(payload);
+      // if body is encoded, update payload
+      const returnData = results[0];
+      if ("encryptChunk" in returnData === false) {
+        throw new Error("Invalid return data.");
+      }
+      const { encryptChunk, finishEncrypt } = returnData;
+      const transformStream = new Transform({
+        transform(chunk, _encoding, callback) {
+          try {
+            const u8 = new Uint8Array(chunk);
+            const encrypted = encryptChunk(u8);
+            if (encrypted === null) {
+              return callback(new Error("Encryption failed."));
+            }
+            this.push(encrypted);
+            callback();
+          } catch (error) {
+            callback(error as Error);
+          }
+        },
+        final(callback) {
+          const data = finishEncrypt();
+          if (data === null) {
+            return callback(new Error("Encryption final failed."));
+          }
+          this.push(data);
+          callback();
+        },
+      });
+      // @ts-ignore
+      const readableStream = Readable.fromWeb(proxyResponse.body);
+      readableStream.pipe(transformStream);
+      return reply.send(transformStream);
     } catch (error) {
       request.log.error(error);
       if (error instanceof MteRelayError) {
