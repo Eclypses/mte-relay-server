@@ -29,10 +29,9 @@ const passThroughRoutes: FastifyPluginCallback<{
           duplex: "half",
         });
 
-        const headers = new Headers(proxyResponse.headers);
-
-        // @ts-ignore - it's fine.
-        reply.headers(headers);
+        proxyResponse.headers.forEach((value, key) => {
+          reply.header(key, value);
+        });
         reply.status(proxyResponse.status);
 
         return reply.send(proxyResponse.body);
