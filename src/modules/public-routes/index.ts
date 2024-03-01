@@ -26,9 +26,9 @@ export const publicRoutes: FastifyPluginCallback<{
     reply.send(MTE_ERRORS);
   });
 
-  // GET /api/decode-headers/:headers
+  // GET /api/mte-parse?headers=
   fastify.get<{ Querystring: { headers: string } }>(
-    "/api/mte-decode",
+    "/api/mte-parse",
     (request, reply) => {
       const result = parseMteRelayHeader(request.query.headers);
       reply.send(result);
