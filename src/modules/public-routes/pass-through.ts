@@ -1,4 +1,5 @@
 import { FastifyPluginCallback } from "fastify";
+import fetch from "node-fetch";
 
 /**
  * - if a route matches the passThrough routes in options
@@ -8,7 +9,6 @@ const passThroughRoutes: FastifyPluginCallback<{
   routes: string[];
   upstream: string;
 }> = (fastify, options, done: any) => {
-  // remove all content type parsers
   fastify.removeAllContentTypeParsers();
   fastify.addContentTypeParser("*", function (_request, _payload, done) {
     done(null);
@@ -17,23 +17,31 @@ const passThroughRoutes: FastifyPluginCallback<{
   options.routes.forEach((route) => {
     fastify.all(route, async (request, reply) => {
       try {
-        const { host, ...headersSansHost } = request.headers;
+        const headers: Record<string, string> = {};
+        for (const entry of Object.entries(request.headers)) {
+          headers[entry[0]] = entry[1] as string;
+        }
+        delete headers["host"];
+        delete headers["content-length"];
+
+        let body: any = undefined;
+        if (["GET", "HEAD"].includes(request.method) === false) {
+          body = request.raw;
+        }
 
         const proxyResponse = await fetch(options.upstream + request.url, {
           method: request.method,
-          headers: headersSansHost as unknown as HeadersInit,
-          body: request.body
-            ? (request.raw as unknown as ReadableStream<Uint8Array>)
-            : undefined,
+          headers,
+          body,
           // @ts-ignore - required, but not in TS definitions
           duplex: "half",
         });
-
         proxyResponse.headers.forEach((value, key) => {
           reply.header(key, value);
         });
+        reply.header("content-encoding", undefined);
         reply.status(proxyResponse.status);
-
+        // @ts-ignore
         return reply.send(proxyResponse.body);
       } catch (error) {
         request.log.error(error);

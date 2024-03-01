@@ -417,23 +417,3 @@ function proxyHandler(
 }
 
 export default proxyHandler;
-
-// determine if encoded content should be decoded to text or to UInt8Array
-async function streamToUint8Array(stream: Readable): Promise<Uint8Array> {
-  const chunks: Uint8Array[] = [];
-
-  return new Promise<Uint8Array>((resolve, reject) => {
-    stream.on("data", (chunk: Buffer) => {
-      chunks.push(chunk);
-    });
-
-    stream.on("end", () => {
-      const buffer = Buffer.concat(chunks);
-      resolve(new Uint8Array(buffer));
-    });
-
-    stream.on("error", (error) => {
-      reject(error);
-    });
-  });
-}
