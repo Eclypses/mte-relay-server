@@ -4,11 +4,11 @@ import {
   FastifyReply,
   HTTPMethods,
 } from "fastify";
-import { Readable, Transform } from "stream";
+import fetch from "node-fetch";
 import { decode, encode } from "./mte";
-import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
-import { MteRelayError } from "./mte/errors";
 import mteIdManager from "./mte-id-manager";
+import { MteRelayError } from "./mte/errors";
+import { Transform } from "stream";
 import { RelayOptions, formatMteRelayHeader } from "../utils/mte-relay-header";
 
 function proxyHandler(
@@ -30,6 +30,12 @@ function proxyHandler(
     mteRelayHeader: options.mteRelayHeader,
     clientIdSecret: options.clientIdSecret,
     outboundToken: options.outboundToken,
+  });
+
+  // for all content-types, forward incoming stream
+  fastify.removeAllContentTypeParsers();
+  fastify.addContentTypeParser("*", function (_request, payload, done) {
+    return done(null);
   });
 
   // log mte usage
@@ -59,11 +65,6 @@ function proxyHandler(
     const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
     reply.header(options.mteRelayHeader, mteRelayHeader);
     _done();
-  });
-
-  // for all content-types, forward incoming stream
-  fastify.addContentTypeParser("*", function (_request, payload, done) {
-    return done(null, payload);
   });
 
   // remove OPTIONS from httpMethods, they are not needed for server-to-server proxy
@@ -98,9 +99,11 @@ function proxyHandler(
           method: request.method,
           // @ts-ignore - this is fine, i think
           headers: request.headers,
-          body: request.body as unknown as ReadableStream<Uint8Array>,
+          body: request.raw as unknown as ReadableStream<Uint8Array>,
         });
+        //@ts-ignore
         const response = await fetch(_request);
+        //@ts-ignore
         const _response = new Response(response.body, {
           status: response.status,
           statusText: response.statusText,
@@ -133,7 +136,7 @@ function proxyHandler(
       }
 
       // handle body as stream
-      if (request.relayOptions.bodyIsEncoded && request.body) {
+      if (request.relayOptions.bodyIsEncoded) {
         itemsToDecode.push({
           data: "stream",
           output: "stream",
@@ -154,27 +157,35 @@ function proxyHandler(
         result.shift();
       }
 
-      // delete few headers we don't want to forward
-      delete request.headers[options.mteRelayHeader];
-      delete request.headers["content-length"];
-      delete request.headers["transfer-encoding"];
-      delete request.headers["content-type"];
-      delete request.headers["Content-Type"];
-      delete request.headers[options.encodedHeadersHeader];
-      delete request.headers["host"];
-      delete request.headers["cache-control"];
+      // clone request headers
+      const proxyHeaders = new Headers();
+      Object.entries(request.headers).forEach((entry) => {
+        proxyHeaders.set(entry[0], entry[1] as string);
+      });
 
-      // create new request headers
-      const proxyHeaders = cloneHeaders(request.headers);
-      proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
-      proxyHeaders["cache-control"] = "no-cache";
+      // delete few headers we don't want to forward upstream
+      const headersToDelete = [
+        "host",
+        "content-type",
+        "content-length",
+        options.mteRelayHeader,
+        options.encodedHeadersHeader,
+      ];
+      for (const header in request.headers) {
+        if (headersToDelete.includes(header.toLowerCase())) {
+          proxyHeaders.delete(header);
+        }
+      }
+
+      // append new headers
+      proxyHeaders.set("host", options.upstream.replace(/https?:\/\//, ""));
 
       // decode headers, if present
       let decodedHeaders: Record<string, string> = {};
       if (request.relayOptions.headersAreEncoded) {
         decodedHeaders = JSON.parse(result[0] as string);
         Object.entries(decodedHeaders).forEach(([key, value]) => {
-          proxyHeaders[key] = value as string;
+          proxyHeaders.set(key, value);
         });
         request.log.debug(
           `Decoded Headers:\n${JSON.stringify(decodedHeaders)}`
@@ -183,7 +194,7 @@ function proxyHandler(
       }
 
       // decode payload, if present
-      let proxyPayload = request.body;
+      let proxyPayload: any = undefined;
       if (request.relayOptions.bodyIsEncoded) {
         const returnData = result[0];
         if ("decryptChunk" in returnData == false) {
@@ -213,16 +224,15 @@ function proxyHandler(
             callback();
           },
         });
-
-        (request.body as Readable).pipe(proxyPayload as Transform);
+        request.raw.pipe(proxyPayload);
       }
 
       // make new request
-      let proxyResponse: void | Response = void 0;
+      let proxyResponse: void | fetch.Response = void 0;
       try {
         proxyResponse = await fetch(options.upstream + "/" + decryptedUrl, {
           method: request.method,
-          headers: proxyHeaders,
+          headers: proxyHeaders as unknown as fetch.HeadersInit,
           body: proxyPayload as any,
           // @ts-ignore
           duplex: "half",
@@ -254,54 +264,81 @@ function proxyHandler(
         `Proxy Response Headers - Original:\n${proxyResponse.headers}`
       );
 
-      // @ts-ignore
-      const responseHeaders = cloneHeaders(proxyResponse.headers);
-
       // create response headers
-      const methods = proxyResponse.headers.get("access-control-allow-methods");
-      if (methods) {
-        responseHeaders["access-control-allow-methods"] = methods;
-      }
+      proxyResponse.headers.forEach((value, key) => {
+        reply.header(key, value);
+      });
 
-      // merge these headers with upstream server headers, if present
-      responseHeaders["access-control-allow-headers"] = (() => {
-        let value: string[] = [];
+      // merge access-control-allow-headers
+      (() => {
+        let values = new Set<string>();
+        values.add(options.encodedHeadersHeader);
+        values.add(options.mteRelayHeader);
         const replyHeader = reply.getHeader("access-control-allow-headers");
         if (replyHeader) {
-          value.push(makeHeaderAString(replyHeader));
+          String(replyHeader)
+            .split(",")
+            .forEach((header) => {
+              values.add(header.trim().toLowerCase());
+            });
         }
         const proxyResponseHeader = proxyResponse.headers.get(
           "access-control-allow-headers"
         );
         if (proxyResponseHeader) {
-          value.push(makeHeaderAString(proxyResponseHeader));
+          String(proxyResponseHeader)
+            .split(",")
+            .forEach((header) => {
+              values.add(header.trim().toLowerCase());
+            });
         }
-        return value.join(", ");
+        reply.removeHeader("access-control-allow-headers");
+        const headerValue = Array.from(values).join(", ");
+        reply.header("access-control-allow-headers", headerValue);
       })();
-      responseHeaders["access-control-expose-headers"] = (() => {
-        let value: string[] = [];
+      // merge "access-control-expose-headers" header
+      (() => {
+        let values = new Set<string>();
+        values.add(options.encodedHeadersHeader);
+        values.add(options.mteRelayHeader);
         const replyHeader = reply.getHeader("access-control-expose-headers");
         if (replyHeader) {
-          value.push(makeHeaderAString(replyHeader));
+          String(replyHeader)
+            .split(",")
+            .forEach((header) => {
+              values.add(header.trim().toLowerCase());
+            });
         }
         const proxyResponseHeader = proxyResponse.headers.get(
           "access-control-expose-headers"
         );
         if (proxyResponseHeader) {
-          value.push(makeHeaderAString(proxyResponseHeader));
+          String(replyHeader)
+            .split(",")
+            .forEach((header) => {
+              values.add(header.trim().toLowerCase());
+            });
         }
-        return value.join(", ");
+        reply.removeHeader("access-control-expose-headers");
+        const headerValue = Array.from(values).join(", ");
+        reply.header("access-control-expose-headers", headerValue);
       })();
-      delete responseHeaders["content-length"];
-      delete responseHeaders["transfer-encoding"];
-      delete responseHeaders["access-control-allow-origin"];
-      responseHeaders[options.encodedHeadersHeader];
 
-      // copy cookies
-      const setCookie = proxyResponse.headers.get("set-cookie");
-      if (setCookie) {
-        responseHeaders["set-cookie"] = setCookie;
-      }
+      // don't forward these headers to client
+      const headerToDelete = [
+        "set-cookie",
+        "content-length",
+        "content-encoding",
+        options.mteRelayHeader,
+      ];
+      headerToDelete.forEach((header) => {
+        reply.removeHeader(header);
+      });
+
+      // copy cookies - they have a special implementation
+      proxyResponse.headers.raw()["set-cookie"]?.forEach((cookie) => {
+        reply.header("set-cookie", cookie);
+      });
 
       request.log.debug(
         `Proxy Response Headers - Modified:\n${proxyResponse.headers}`
@@ -346,7 +383,7 @@ function proxyHandler(
 
       // attached encoded headers to response
       if (hasEncodedHeaders) {
-        responseHeaders[options.encodedHeadersHeader] = results[0] as string;
+        reply.header(options.encodedHeadersHeader, results[0] as string);
         results.shift();
       }
 
@@ -361,11 +398,10 @@ function proxyHandler(
       };
       const responseRelayOptionsHeader =
         formatMteRelayHeader(responseRelayOptions);
-      responseHeaders[options.mteRelayHeader] = responseRelayOptionsHeader;
+      reply.header(options.mteRelayHeader, responseRelayOptionsHeader);
 
       // copy proxyResponse headers to reply
       reply.status(proxyResponse.status);
-      reply.headers(responseHeaders);
 
       // if body is encoded, update payload
       const returnData = results[0];
@@ -397,8 +433,9 @@ function proxyHandler(
         },
       });
       // @ts-ignore
-      const readableStream = Readable.fromWeb(proxyResponse.body);
-      readableStream.pipe(transformStream);
+      // const readableStream = Readable.fromWeb(proxyResponse.body);
+      // @ts-ignore
+      proxyResponse.body?.pipe(transformStream);
       return reply.send(transformStream);
     } catch (error) {
       request.log.error(error);

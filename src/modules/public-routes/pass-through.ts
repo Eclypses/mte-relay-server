@@ -35,12 +35,19 @@ const passThroughRoutes: FastifyPluginCallback<{
           body,
           // @ts-ignore - required, but not in TS definitions
           duplex: "half",
+          redirect: "manual",
         });
+
         proxyResponse.headers.forEach((value, key) => {
           reply.header(key, value);
         });
-        reply.header("content-encoding", undefined);
         reply.status(proxyResponse.status);
+        reply.removeHeader("content-encoding");
+        reply.removeHeader("set-cookie");
+        proxyResponse.headers.raw()["set-cookie"]?.forEach((cookie) => {
+          reply.header("set-cookie", cookie);
+        });
+
         // @ts-ignore
         return reply.send(proxyResponse.body);
       } catch (error) {
