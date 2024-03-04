@@ -319,6 +319,10 @@ function proxyHandler(
               values.add(header.trim().toLowerCase());
             });
         }
+        // delete encoded headers from this header
+        Object.keys(decodedHeaders).forEach((header) => {
+          values.delete(header);
+        });
         reply.removeHeader("access-control-expose-headers");
         const headerValue = Array.from(values).join(", ");
         reply.header("access-control-expose-headers", headerValue);
@@ -356,6 +360,7 @@ function proxyHandler(
         const value = proxyResponse?.headers.get(key);
         if (value) {
           headersToEncode[key] = value;
+          reply.removeHeader(key);
         }
       });
       const contentTypeHeader = proxyResponse.headers.get("content-type");
