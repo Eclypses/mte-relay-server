@@ -5,6 +5,7 @@ import {
   HTTPMethods,
 } from "fastify";
 import fetch from "node-fetch";
+import { Readable } from "stream";
 import { decode, encode } from "./mte";
 import mteIdManager from "./mte-id-manager";
 import { MteRelayError } from "./mte/errors";
@@ -137,10 +138,18 @@ function proxyHandler(
 
       // handle body as stream
       if (request.relayOptions.bodyIsEncoded) {
-        itemsToDecode.push({
-          data: "stream",
-          output: "stream",
-        });
+        if (request.relayOptions.encodeType === "MTE") {
+          const u8 = await readStreamToU8(request.raw as Readable);
+          itemsToDecode.push({
+            data: u8,
+            output: "Uint8Array",
+          });
+        } else {
+          itemsToDecode.push({
+            data: "stream",
+            output: "stream",
+          });
+        }
       }
 
       // decode items
@@ -196,35 +205,39 @@ function proxyHandler(
       // decode payload, if present
       let proxyPayload: any = undefined;
       if (request.relayOptions.bodyIsEncoded) {
-        const returnData = result[0];
-        if ("decryptChunk" in returnData == false) {
-          throw new Error("Return data does not contain decryptChunk");
-        }
-        const { decryptChunk, finishDecrypt } = returnData;
-        proxyPayload = new Transform({
-          transform(chunk, _encoding, callback) {
-            try {
-              const u8 = new Uint8Array(chunk);
-              const decrypted = decryptChunk(u8);
-              if (decrypted === null) {
-                return callback(new Error("Decryption failed."));
+        if (request.relayOptions.encodeType === "MTE") {
+          proxyPayload = result[0] as Uint8Array;
+        } else {
+          const returnData = result[0];
+          if ("decryptChunk" in returnData == false) {
+            throw new Error("Return data does not contain decryptChunk");
+          }
+          const { decryptChunk, finishDecrypt } = returnData;
+          proxyPayload = new Transform({
+            transform(chunk, _encoding, callback) {
+              try {
+                const u8 = new Uint8Array(chunk);
+                const decrypted = decryptChunk(u8);
+                if (decrypted === null) {
+                  return callback(new Error("Decryption failed."));
+                }
+                this.push(decrypted);
+                callback();
+              } catch (error) {
+                callback(error as Error);
               }
-              this.push(decrypted);
+            },
+            final(callback) {
+              const data = finishDecrypt();
+              if (data === null) {
+                return callback(new Error("Decryption final failed."));
+              }
+              this.push(data);
               callback();
-            } catch (error) {
-              callback(error as Error);
-            }
-          },
-          final(callback) {
-            const data = finishDecrypt();
-            if (data === null) {
-              return callback(new Error("Decryption final failed."));
-            }
-            this.push(data);
-            callback();
-          },
-        });
-        request.raw.pipe(proxyPayload);
+            },
+          });
+          request.raw.pipe(proxyPayload);
+        }
       }
 
       // make new request
@@ -374,10 +387,18 @@ function proxyHandler(
       }
 
       // encode body as stream
-      itemsToEncode.push({
-        data: "stream",
-        output: "stream",
-      });
+      if (request.relayOptions.encodeType === "MTE") {
+        const buffer = await proxyResponse.arrayBuffer();
+        itemsToEncode.push({
+          data: new Uint8Array(buffer),
+          output: "Uint8Array",
+        });
+      } else {
+        itemsToEncode.push({
+          data: "stream",
+          output: "stream",
+        });
+      }
 
       // encode response
       const results = await encode({
@@ -409,39 +430,42 @@ function proxyHandler(
       reply.status(proxyResponse.status);
 
       // if body is encoded, update payload
-      const returnData = results[0];
-      if ("encryptChunk" in returnData === false) {
-        throw new Error("Invalid return data.");
-      }
-      const { encryptChunk, finishEncrypt } = returnData;
-      const transformStream = new Transform({
-        transform(chunk, _encoding, callback) {
-          try {
-            const u8 = new Uint8Array(chunk);
-            const encrypted = encryptChunk(u8);
-            if (encrypted === null) {
-              return callback(new Error("Encryption failed."));
+      let responseBody: any;
+      if (request.relayOptions.encodeType === "MTE") {
+        responseBody = results[0] as Uint8Array;
+      } else {
+        const returnData = results[0];
+        if ("encryptChunk" in returnData === false) {
+          throw new Error("Invalid return data.");
+        }
+        const { encryptChunk, finishEncrypt } = returnData;
+        responseBody = new Transform({
+          transform(chunk, _encoding, callback) {
+            try {
+              const u8 = new Uint8Array(chunk);
+              const encrypted = encryptChunk(u8);
+              if (encrypted === null) {
+                return callback(new Error("Encryption failed."));
+              }
+              this.push(encrypted);
+              callback();
+            } catch (error) {
+              callback(error as Error);
             }
-            this.push(encrypted);
+          },
+          final(callback) {
+            const data = finishEncrypt();
+            if (data === null) {
+              return callback(new Error("Encryption final failed."));
+            }
+            this.push(data);
             callback();
-          } catch (error) {
-            callback(error as Error);
-          }
-        },
-        final(callback) {
-          const data = finishEncrypt();
-          if (data === null) {
-            return callback(new Error("Encryption final failed."));
-          }
-          this.push(data);
-          callback();
-        },
-      });
-      // @ts-ignore
-      // const readableStream = Readable.fromWeb(proxyResponse.body);
-      // @ts-ignore
-      proxyResponse.body?.pipe(transformStream);
-      return reply.send(transformStream);
+          },
+        });
+        // @ts-ignore
+        proxyResponse.body?.pipe(responseBody);
+      }
+      return reply.send(responseBody);
     } catch (error) {
       request.log.error(error);
       if (error instanceof MteRelayError) {
@@ -459,3 +483,18 @@ function proxyHandler(
 }
 
 export default proxyHandler;
+
+function readStreamToU8(stream: Readable) {
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const chunks: Uint8Array[] = [];
+    stream.on("data", (chunk) => {
+      chunks.push(chunk);
+    });
+    stream.on("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
+    stream.on("error", (error) => {
+      reject(error);
+    });
+  });
+}
