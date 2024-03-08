@@ -136,7 +136,7 @@ function proxyHandler(
         }
       }
 
-      // handle body as stream
+      // decode body
       if (request.relayOptions.bodyIsEncoded) {
         if (request.relayOptions.encodeType === "MTE") {
           const u8 = await readStreamToU8(request.raw as Readable);
@@ -387,12 +387,17 @@ function proxyHandler(
       }
 
       // encode body as stream
+      let bodyIsEncoded = true;
       if (request.relayOptions.encodeType === "MTE") {
         const buffer = await proxyResponse.arrayBuffer();
-        itemsToEncode.push({
-          data: new Uint8Array(buffer),
-          output: "Uint8Array",
-        });
+        if (buffer.byteLength > 0) {
+          itemsToEncode.push({
+            data: new Uint8Array(buffer),
+            output: "Uint8Array",
+          });
+        } else {
+          bodyIsEncoded = false;
+        }
       } else {
         itemsToEncode.push({
           data: "stream",
@@ -420,7 +425,7 @@ function proxyHandler(
         encodeType: request.relayOptions.encodeType,
         urlIsEncoded: false,
         headersAreEncoded: hasEncodedHeaders,
-        bodyIsEncoded: true,
+        bodyIsEncoded: bodyIsEncoded,
       };
       const responseRelayOptionsHeader =
         formatMteRelayHeader(responseRelayOptions);
@@ -430,8 +435,8 @@ function proxyHandler(
       reply.status(proxyResponse.status);
 
       // if body is encoded, update payload
-      let responseBody: any;
-      if (request.relayOptions.encodeType === "MTE") {
+      let responseBody: any = null;
+      if (bodyIsEncoded && request.relayOptions.encodeType === "MTE") {
         responseBody = results[0] as Uint8Array;
       } else {
         const returnData = results[0];

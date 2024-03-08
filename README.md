@@ -1,6 +1,6 @@
 # MTE Relay Server
 
-The MTE Relay Server is a NodeJS server that proxies HTTP requests that have been MTE encoded.
+MTE Relay Server is one half of an end-to-end encryption system that protects all network requests with next-generation application data security, on prem or in the cloud. MTE Relay Server acts as a proxy-server that sits in front of your normal server, and communicates with an MTE Relay Client, encoding and decoding all network traffic. MTE Relay Server is highly customizable and can be configured to integrate with a number of other services through the use of custom adapters.
 
 ### Installation
 
@@ -14,8 +14,8 @@ npx create-mte-relay-server@latest
 ### Quick Start Guide
 
 - Configure `mte-relay-config.yaml` file
-- Update the `.npmrc` file with your auth token. This can be found in the Eclypses Developer Portal.
-- Install your MTE library package. This can be found in the Eclypses Developer Portal.
+- Update the `.npmrc` file with your auth token. This can be found in the [Eclypses Developer's Portal](https://developers.eclypses.com).
+- Install your MTE library package. This can be found in the [Eclypses Developer's Portal](https://developers.eclypses.com).
   - Example: `npm i mte@npm:@eclypses/my-mte-library`
 - Run locally with `npm run start`
 
@@ -58,11 +58,6 @@ The configuration file is a YAML file that contains the following properties. Ex
   - Note: `OPTIONS` and `HEAD` are always allowed.
 - `headers`
   - An object of headers that will be added to all request/responses.
-- `serverId`
-  - A unique identifier for this server. A GUID or 32+ character string is recommended. Use this when load balancing multiple instances of MTE Relay Server so they all have the same server ID.
-- `maxFormDataSize`
-  - The maximum size of a form data request body in bytes. If a request body is larger than this, it will be rejected with a 413 error.
-  - Default: `20,971,520` - 20 MB
 - `maxPoolSize`
   - The number of encoder objects and decoder objects held in a pool. A larger pool will consume more memory, but it will also handle more traffic more quickly. This number is applied to all four pools; the MTE Encoder, MTE Decoder, MKE Encoder, and MKE Decoder pools.
   - Default: `25`
@@ -103,8 +98,6 @@ corsMethods:
   - DELETE
 headers:
   x-service-name: mte-relay
-serverId: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
-maxFormDataSize: 20971520
 ```
 
 ### Local Implementation
@@ -211,7 +204,3 @@ See examples in the [examples/startup-scripts](examples/startup-scripts) directo
 
 - Follow the quick start guide to configure requires files and install dependencies.
 - Run `npm run dev` to start the server in development mode.
-
-### Load Balancing
-
-When load balancing two or more MTE Relay Servers, it is important that they all use the same cache adapter and server ID. This will ensure that MTE State is shared between all servers.
