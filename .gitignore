@@ -12,4 +12,6 @@ pnpm-lock.yaml
 data/
 settings.js
 .env
+pnpm-lock.yaml
+aws-Dockerfile
 mte*.tgz

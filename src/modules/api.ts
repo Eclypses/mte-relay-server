@@ -1,46 +1,50 @@
 import { FastifyPluginCallback } from "fastify";
 import { z } from "zod";
-import { getEcdh } from "../utils/ecdh";
-import { instantiateEncoder, instantiateDecoder } from "./mte";
+import {
+  instantiateEncoder,
+  instantiateDecoder,
+  getKyberResponder,
+} from "./mte";
 import { getNonce } from "../utils/nonce";
-import { MTE_ERRORS, MteRelayError } from "./mte/errors";
+import { MteRelayError } from "./mte/errors";
+import mteIdManager from "./mte-id-manager";
 
-/**
- * Protect API Routes that require x-mte-id header
- */
-export const protectedApiRoutes: FastifyPluginCallback<{
-  clientIdHeader: string;
-}> = (fastify, options, done) => {
-  // on every request
-  fastify.addHook("onRequest", (request, reply, _done) => {
-    if (!request.clientId) {
-      request.log.error(`Missing ${options.clientIdHeader} header.`);
-      return reply.code(400).send(`Missing ${options.clientIdHeader} header.`);
-    }
-    _done();
-  });
-
-  // mte pair route
-  const mtePairSchema = z.object({
+const mtePairArraySchema = z.array(
+  z.object({
+    pairId: z.string(),
     encoderPublicKey: z.string(),
     encoderPersonalizationStr: z.string(),
     decoderPublicKey: z.string(),
     decoderPersonalizationStr: z.string(),
+  })
+);
+
+/**
+ * Protect API Routes that require x-mte-id header
+ */
+export const mtePairRoutes: FastifyPluginCallback<{
+  mteRelayHeader: string;
+  clientIdSecret: string;
+}> = async (fastify, options, done) => {
+  // Register MTE ID manager module
+  await fastify.register(mteIdManager, {
+    clientIdSecret: options.clientIdSecret,
+    mteRelayHeader: options.mteRelayHeader,
   });
-  const mtePairArraySchema = z.array(
-    z.object({
-      pairId: z.string(),
-      encoderPublicKey: z.string(),
-      encoderPersonalizationStr: z.string(),
-      decoderPublicKey: z.string(),
-      decoderPersonalizationStr: z.string(),
-    })
-  );
-  const bodySchema = z.union([mtePairSchema, mtePairArraySchema]);
+
+  // HEAD /api/mte-relay
+  fastify.head("/api/mte-relay", (request, reply) => {
+    reply.header(options.mteRelayHeader, request.clientIdSigned);
+    reply.status(200).send();
+  });
+
+  // mte pair route
   fastify.post("/api/mte-pair", async (request, reply) => {
     try {
+      reply.header(options.mteRelayHeader, request.clientIdSigned);
+
       // validate request body
-      const validationResult = bodySchema.safeParse(request.body);
+      const validationResult = mtePairArraySchema.safeParse(request.body);
       if (!validationResult.success) {
         request.log.error(validationResult.error);
         return reply
@@ -48,82 +52,40 @@ export const protectedApiRoutes: FastifyPluginCallback<{
           .send(JSON.stringify(validationResult.error, null, 2));
       }
 
-      if (Array.isArray(validationResult.data)) {
-        const returnInitValues = [];
-        // create encoders and decoders
-        for (const pair of validationResult.data) {
-          // create encoder
-          const encoderNonce = getNonce();
-          const encoderEcdh = getEcdh();
-          const encoderEntropy = encoderEcdh.computeSharedSecret(
-            pair.decoderPublicKey
-          );
-          instantiateEncoder({
-            id: `encoder.${request.clientId}.${pair.pairId}`,
-            entropy: encoderEntropy,
-            nonce: encoderNonce,
-            personalization: pair.decoderPersonalizationStr,
-          });
+      const returnInitValues = [];
+      // create encoders and decoders
+      for (const pair of validationResult.data) {
+        // create encoder
+        const encoderNonce = getNonce();
+        const encoderKyber = getKyberResponder(pair.decoderPublicKey);
+        instantiateEncoder({
+          id: `encoder.${request.relayOptions.clientId}.${pair.pairId}`,
+          entropy: encoderKyber.secret,
+          nonce: encoderNonce,
+          personalization: pair.decoderPersonalizationStr,
+        });
 
-          // create decoder
-          const decoderNonce = getNonce();
-          const decoderEcdh = getEcdh();
-          const decoderEntropy = decoderEcdh.computeSharedSecret(
-            pair.encoderPublicKey
-          );
-          instantiateDecoder({
-            id: `decoder.${request.clientId}.${pair.pairId}`,
-            entropy: decoderEntropy,
-            nonce: decoderNonce,
-            personalization: pair.encoderPersonalizationStr,
-          });
+        // create decoder
+        const decoderNonce = getNonce();
+        const decoderKyber = getKyberResponder(pair.encoderPublicKey);
+        instantiateDecoder({
+          id: `decoder.${request.relayOptions.clientId}.${pair.pairId}`,
+          entropy: decoderKyber.secret,
+          nonce: decoderNonce,
+          personalization: pair.encoderPersonalizationStr,
+        });
 
-          returnInitValues.push({
-            pairId: pair.pairId,
-            encoderNonce,
-            encoderPublicKey: encoderEcdh.publicKey,
-            decoderNonce,
-            decoderPublicKey: decoderEcdh.publicKey,
-          });
-        }
-
-        // send response
-        return reply.status(200).send(returnInitValues);
+        returnInitValues.push({
+          pairId: pair.pairId,
+          encoderNonce,
+          encoderSecret: encoderKyber.encryptedSecret,
+          decoderNonce,
+          decoderSecret: decoderKyber.encryptedSecret,
+        });
       }
 
-      // create encoder
-      const encoderNonce = getNonce();
-      const encoderEcdh = getEcdh();
-      const encoderEntropy = encoderEcdh.computeSharedSecret(
-        validationResult.data.decoderPublicKey
-      );
-      instantiateEncoder({
-        id: `encoder.${request.clientId}.${request.pairId}`,
-        entropy: encoderEntropy,
-        nonce: encoderNonce,
-        personalization: validationResult.data.decoderPersonalizationStr,
-      });
-
-      // create decoder
-      const decoderNonce = getNonce();
-      const decoderEcdh = getEcdh();
-      const decoderEntropy = decoderEcdh.computeSharedSecret(
-        validationResult.data.encoderPublicKey
-      );
-      instantiateDecoder({
-        id: `decoder.${request.clientId}.${request.pairId}`,
-        entropy: decoderEntropy,
-        nonce: decoderNonce,
-        personalization: validationResult.data.encoderPersonalizationStr,
-      });
-
       // send response
-      reply.status(200).send({
-        encoderNonce,
-        encoderPublicKey: encoderEcdh.publicKey,
-        decoderNonce,
-        decoderPublicKey: decoderEcdh.publicKey,
-      });
+      return reply.status(200).send(returnInitValues);
     } catch (error) {
       request.log.error(error);
       if (error instanceof MteRelayError) {
@@ -138,35 +100,6 @@ export const protectedApiRoutes: FastifyPluginCallback<{
       }
       reply.status(500).send(msg);
     }
-  });
-
-  done();
-};
-
-/**
- * Public API Routes
- */
-export const anonymousApiRoutes: FastifyPluginCallback<{}> = (
-  fastify,
-  _options,
-  done
-) => {
-  // echo endpoint
-  fastify.get("/api/mte-echo/:msg?", (request, reply) => {
-    reply.send({
-      // @ts-ignore
-      echo: request.params?.msg || true,
-      time: Date.now(),
-    });
-  });
-
-  fastify.get("/api/mte-errors", (_request, reply) => {
-    reply.send(MTE_ERRORS);
-  });
-
-  // HEAD /api/mte-relay
-  fastify.head("/api/mte-relay", (_request, reply) => {
-    reply.status(200).send();
   });
 
   done();

@@ -1,7 +1,6 @@
 import yaml from "yaml";
 import fs from "fs";
 import path from "path";
-import crypto from "crypto";
 import { z } from "zod";
 
 // where to store sqlite3 db, and tmp/
@@ -12,19 +11,13 @@ const publicDir = path.join(process.cwd(), "public");
 
 // default settings
 const DEFAULT_OPTIONS = {
-  SERVER_ID: crypto.randomUUID(),
-  SERVER_ID_HEADER: `x-mte-relay-server-id`,
-  CLIENT_ID_HEADER: `x-mte-relay-client-id`,
-  SESSION_ID_HEADER: `x-mte-relay-session-id`,
-  PAIR_ID_HEADER: `x-mte-relay-pair-id`,
   ENCODED_HEADERS_HEADER: `x-mte-relay-eh`,
-  ENCODER_TYPE_HEADER: "x-mte-relay-et",
+  MTE_RELAY_HEADER: "x-mte-relay",
   PORT: 8080,
   DEBUG: false,
   PERSISTENT_DIR: persistentDir,
   PUBLIC_DIR: publicDir,
   TEMP_DIR_PATH: path.join(persistentDir, "tmp"),
-  MAX_FORM_DATA_SIZE: 1024 * 1024 * 20, // 20mb
   MAX_POOL_SIZE: 25,
 };
 
@@ -34,16 +27,17 @@ const settingsSchema = z.object({
   licenseCompany: z.string(),
   licenseKey: z.string(),
   clientIdSecret: z.string(),
-  corsOrigins: z.array(z.string().url({ message: "corsOrigin must be a valid URL." })),
+  corsOrigins: z.array(
+    z.string().url({ message: "corsOrigin must be a valid URL." })
+  ),
   port: z.number().optional(),
   debug: z.boolean().optional(),
   passThroughRoutes: z.array(z.string()).optional(),
   corsMethods: z.array(z.string()).optional(),
-  outboundProxyBearerToken: z.string().optional(),
+  outboundToken: z.string().optional(),
   maxFormDataSize: z.number().optional(),
   headers: z.object({}).passthrough().optional(),
   mteRoutes: z.array(z.string()).optional(),
-  serverId: z.string().optional(),
   maxPoolSize: z.number().min(1).optional(),
 });
 
@@ -83,12 +77,10 @@ export default async function () {
     CORS_ORIGINS: userSettings.corsOrigins,
     CLIENT_ID_SECRET: userSettings.clientIdSecret,
     DEBUG: userSettings.debug || DEFAULT_OPTIONS.DEBUG,
-    OUTBOUND_PROXY_BEARER_TOKEN: userSettings.outboundProxyBearerToken,
+    OUTBOUND_TOKEN: userSettings.outboundToken,
     PASS_THROUGH_ROUTES: userSettings.passThroughRoutes || [],
-    MAX_FORM_DATA_SIZE: userSettings.maxFormDataSize || DEFAULT_OPTIONS.MAX_FORM_DATA_SIZE,
     HEADERS: userSettings.headers,
     MTE_ROUTES: userSettings.mteRoutes,
-    SERVER_ID: userSettings.serverId || DEFAULT_OPTIONS.SERVER_ID,
     MAX_POOL_SIZE: userSettings.maxPoolSize || DEFAULT_OPTIONS.MAX_POOL_SIZE,
   };
 

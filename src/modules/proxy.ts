@@ -4,15 +4,13 @@ import {
   FastifyReply,
   HTTPMethods,
 } from "fastify";
-import { mkeDecode, mkeEncode } from "./mte";
-import multipart from "@fastify/multipart";
-import FormData from "form-data";
-import axios, { AxiosResponse } from "axios";
-import fs from "fs";
-import path from "path";
-import { concatTwoUint8Arrays } from "../utils/concat-arrays";
-import { cloneHeaders, makeHeaderAString } from "../utils/header-utils";
+import fetch from "node-fetch";
+import { Readable } from "stream";
+import { decode, encode } from "./mte";
+import mteIdManager from "./mte-id-manager";
 import { MteRelayError } from "./mte/errors";
+import { Transform } from "stream";
+import { RelayOptions, formatMteRelayHeader } from "../utils/mte-relay-header";
 
 function proxyHandler(
   fastify: FastifyInstance,
@@ -22,56 +20,52 @@ function proxyHandler(
     routes?: string[];
     tempDirPath: string;
     outboundToken?: string;
-    clientIdHeader: string;
-    sessionIdHeader: string;
-    pairIdHeader: string;
+    mteRelayHeader: string;
     encodedHeadersHeader: string;
-    maxFormDataSize: number;
-    encoderTypeHeader: string;
+    clientIdSecret: string;
   },
   done: any
 ) {
+  // register MTE ID Manager
+  fastify.register(mteIdManager, {
+    mteRelayHeader: options.mteRelayHeader,
+    clientIdSecret: options.clientIdSecret,
+    outboundToken: options.outboundToken,
+  });
+
+  // for all content-types, forward incoming stream
+  fastify.removeAllContentTypeParsers();
+  fastify.addContentTypeParser("*", function (_request, payload, done) {
+    return done(null);
+  });
+
   // log mte usage
   fastify.addHook("onRequest", (request, reply, _done) => {
-    if (!request.clientId) {
-      request.log.error(`Missing ${options.clientIdHeader} header.`);
+    if (request.isOutbound) {
+      // do we log outbound requests?
+      return _done();
+    }
+
+    if (!request.relayOptions.clientId) {
+      request.log.error(`Missing clientID header.`);
       return reply.status(401).send("Unauthorized");
     }
-    if (!request.pairId) {
-      const err = new MteRelayError(
-        "PairID Header (or sessionID) is required, but not found."
-      );
+    if (!request.relayOptions.pairId) {
+      const err = new MteRelayError("PairID is required, but not found.");
       request.log.error(err.message);
       return reply.status(err.status).send(err.message);
     }
     request.log.info(
       {
-        [options.clientIdHeader]: request.clientId,
+        ClientId: request.relayOptions.clientId,
         url: request.url,
-        encoderType: request.encoderType,
+        encoderType: request.relayOptions.encodeType,
       },
       `MTE Proxy Route used: ${request.url}`
     );
+    const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
+    reply.header(options.mteRelayHeader, mteRelayHeader);
     _done();
-  });
-
-  // parse multipart/form-data requests
-  fastify.register(multipart, {
-    limits: {
-      fileSize: options.maxFormDataSize,
-    },
-  });
-
-  // if not multipart/form-data, put entire buffer on request.body, and handle decode in handler
-  fastify.addContentTypeParser("*", function (_request, payload, _done) {
-    // parse data
-    let _buffer = new Uint8Array(0);
-    payload.on("data", (chunk: Uint8Array) => {
-      _buffer = concatTwoUint8Arrays(_buffer, chunk);
-    });
-    payload.on("end", async () => {
-      _done(null, _buffer.length > 0 ? _buffer : undefined);
-    });
   });
 
   // remove OPTIONS from httpMethods, they are not needed for server-to-server proxy
@@ -96,190 +90,165 @@ function proxyHandler(
   // handler function
   async function handler(request: FastifyRequest, reply: FastifyReply) {
     try {
-      // determine if authorized outbound-proxy, or if inbound-proxy
-      if (options.outboundToken) {
-        // get bearer token from request
-        const bearerToken = request.headers.authorization?.split(" ")[1];
-        if (bearerToken && bearerToken !== options.outboundToken) {
-          return reply.status(401).send("Unauthorized");
+      // determine if authorized outbound-proxy, ELSE if inbound-proxy
+      if (request.isOutbound) {
+        const upstream = request.headers["x-mte-upstream"] as string;
+        if (!upstream) {
+          return reply.status(400).send("Missing x-mte-upstream header.");
         }
+        const _request = new Request(upstream + request.url, {
+          method: request.method,
+          // @ts-ignore - this is fine, i think
+          headers: request.headers,
+          body: request.raw as unknown as ReadableStream<Uint8Array>,
+        });
+        //@ts-ignore
+        const response = await fetch(_request);
+        //@ts-ignore
+        const _response = new Response(response.body, {
+          status: response.status,
+          statusText: response.statusText,
+          headers: response.headers,
+        });
+        return _response;
       }
 
-      // set headers for proxy request
-      const proxyHeaders = cloneHeaders(request.headers);
-      delete proxyHeaders[options.clientIdHeader];
-      delete proxyHeaders[options.sessionIdHeader];
-      delete proxyHeaders[options.pairIdHeader];
-      delete proxyHeaders[options.encodedHeadersHeader];
-      delete proxyHeaders[options.encoderTypeHeader];
-      delete proxyHeaders["content-length"];
-      proxyHeaders.host = options.upstream.replace(/https?:\/\//, "");
+      const itemsToDecode: {
+        data: string | Uint8Array;
+        output: "str" | "Uint8Array" | "stream";
+      }[] = [];
 
-      // set decoded payload to this variable
-      let proxyPayload: any = undefined;
-
-      // array of paths of tmp files to delete after request
-      let tmpFilesToDelete: string[] = [];
+      // get route to decode
+      if (request.relayOptions.urlIsEncoded) {
+        const uriDecodeUrl = decodeURIComponent(request.url.slice(1));
+        if (uriDecodeUrl.length > 0) {
+          itemsToDecode.push({ data: uriDecodeUrl, output: "str" });
+        }
+      }
 
       // decoded headers
-      let mkeDecodedHeaders: Record<string, string> = {};
-      const encodedHeaders = request.headers[
-        options.encodedHeadersHeader
-      ] as string;
-      if (encodedHeaders) {
-        const decodedHeaders = await mkeDecode(encodedHeaders, {
-          stateId: `decoder.${request.clientId}.${request.pairId}`,
-          output: "str",
-          type: request.encoderType,
-        });
-        const headers = JSON.parse(decodedHeaders as string);
-        Object.entries(headers).forEach(([key, value]) => {
-          mkeDecodedHeaders[key] = value as string;
-          proxyHeaders[key] = value as string;
-        });
-        request.log.debug(`Decoded Headers:\n${JSON.stringify(headers)}`);
+      if (request.relayOptions.headersAreEncoded) {
+        const encodedHeaders = request.headers[
+          options.encodedHeadersHeader
+        ] as string;
+        if (encodedHeaders) {
+          itemsToDecode.push({ data: encodedHeaders, output: "str" });
+        }
       }
 
-      /**
-       * Handle multipart/form-data requests
-       */
-      const contentType = request.headers["content-type"];
-      const isMultipart = !!contentType && contentType.includes("multipart");
-      if (Boolean(contentType) && isMultipart) {
-        const decodedFormData = new FormData();
-        // stores files to tmp dir and return files
-        const formData = await request.file();
-
-        if (!formData) {
-          return reply.status(400).send("No files were uploaded.");
-        }
-
-        // separate fields and files into their own arrays
-        let fields: {
-          fieldname: string;
-          mimetype: string;
-          value: string;
-        }[] = [];
-        let files: {
-          fieldname: string;
-          filename: string;
-          mimetype: string;
-          file: ReadableStream;
-          toBuffer: () => Promise<Buffer>;
-        }[] = [];
-        Object.entries(formData.fields).forEach((field: any) => {
-          if (field[1].mimetype === "application/octet-stream") {
-            files.push(field[1]);
-          } else {
-            fields.push(field[1]);
-          }
-        });
-
-        // decode text fields first
-        let i = 0;
-        const iMax = fields.length;
-        for (; i < iMax; ++i) {
-          const _field = fields[i];
-          const decodedFieldName = await mkeDecode(_field.fieldname, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: "str",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-          const decodedFieldValue = await mkeDecode(_field.value, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: "str",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-          decodedFormData.append(decodedFieldName as string, decodedFieldValue);
-        }
-
-        // decode file fields second
-        let ii = 0;
-        const iiMax = files.length;
-        for (; ii < iiMax; ii++) {
-          const _file = files[ii];
-          const decodedFieldName = await mkeDecode(_file.fieldname, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: "str",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-          const fieldName = decodeURIComponent(_file.filename);
-          const decodedFileName = await mkeDecode(fieldName, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: "str",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-          const buffer = await _file.toBuffer();
-          const u8 = new Uint8Array(buffer);
-          const decodedFile = await mkeDecode(u8, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
+      // decode body
+      if (request.relayOptions.bodyIsEncoded) {
+        if (request.relayOptions.encodeType === "MTE") {
+          const u8 = await readStreamToU8(request.raw as Readable);
+          itemsToDecode.push({
+            data: u8,
             output: "Uint8Array",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
           });
-          // write decoded file to tmp dir
-          const id = Math.floor(Math.random() * 1e15);
-          const tmpPath = path.join(options.tempDirPath, `${id}.tmp`);
-          tmpFilesToDelete.push(tmpPath);
-          await fs.promises.writeFile(tmpPath, decodedFile as Uint8Array);
-          const stream = fs.createReadStream(tmpPath);
-          decodedFormData.append(decodedFieldName as string, stream, {
-            filename: decodedFileName as string,
+        } else {
+          itemsToDecode.push({
+            data: "stream",
+            output: "stream",
           });
         }
-
-        // manage headers
-        proxyHeaders[
-          "content-type"
-        ] = `multipart/form-data; boundary=${decodedFormData.getBoundary()}`;
-
-        // set decoded payload to proxyPayload
-        proxyPayload = decodedFormData;
       }
 
-      /**
-       * Handle NON-multipart/form-data requests
-       */
-      if (Boolean(request.body) && !isMultipart) {
-        // decode incoming payload
-        const contentType =
-          request.headers["content-type"] || "application/json";
-        let decodedPayload: any = request.body;
-        if (request.body) {
-          decodedPayload = await mkeDecode(request.body as any, {
-            stateId: `decoder.${request.clientId}.${request.pairId}`,
-            output: contentTypeIsText(contentType) ? "str" : "Uint8Array",
-            type: request.encoderType,
-          }).catch((err) => {
-            throw new MteRelayError("Failed to decode.", err);
-          });
-        }
+      // decode items
+      const result = await decode({
+        id: `decoder.${request.relayOptions.clientId}.${request.relayOptions.pairId}`,
+        items: itemsToDecode,
+        type: request.relayOptions.encodeType!,
+      });
 
-        // set decoded payload to proxyPayload
-        proxyPayload = decodedPayload;
+      // create new request url
+      let decryptedUrl = request.url.slice(1);
+      if (request.relayOptions.urlIsEncoded) {
+        decryptedUrl = result[0] as string;
+        result.shift();
+      }
+
+      // clone request headers
+      const proxyHeaders = new Headers();
+      Object.entries(request.headers).forEach((entry) => {
+        proxyHeaders.set(entry[0], entry[1] as string);
+      });
+
+      // delete few headers we don't want to forward upstream
+      const headersToDelete = [
+        "host",
+        "content-type",
+        "content-length",
+        options.mteRelayHeader,
+        options.encodedHeadersHeader,
+      ];
+      for (const header in request.headers) {
+        if (headersToDelete.includes(header.toLowerCase())) {
+          proxyHeaders.delete(header);
+        }
+      }
+
+      // append new headers
+      proxyHeaders.set("host", options.upstream.replace(/https?:\/\//, ""));
+
+      // decode headers, if present
+      let decodedHeaders: Record<string, string> = {};
+      if (request.relayOptions.headersAreEncoded) {
+        decodedHeaders = JSON.parse(result[0] as string);
+        Object.entries(decodedHeaders).forEach(([key, value]) => {
+          proxyHeaders.set(key, value);
+        });
+        request.log.debug(
+          `Decoded Headers:\n${JSON.stringify(decodedHeaders)}`
+        );
+        result.shift();
+      }
+
+      // decode payload, if present
+      let proxyPayload: any = undefined;
+      if (request.relayOptions.bodyIsEncoded) {
+        if (request.relayOptions.encodeType === "MTE") {
+          proxyPayload = result[0] as Uint8Array;
+        } else {
+          const returnData = result[0];
+          if ("decryptChunk" in returnData == false) {
+            throw new Error("Return data does not contain decryptChunk");
+          }
+          const { decryptChunk, finishDecrypt } = returnData;
+          proxyPayload = new Transform({
+            transform(chunk, _encoding, callback) {
+              try {
+                const u8 = new Uint8Array(chunk);
+                const decrypted = decryptChunk(u8);
+                if (decrypted === null) {
+                  return callback(new Error("Decryption failed."));
+                }
+                this.push(decrypted);
+                callback();
+              } catch (error) {
+                callback(error as Error);
+              }
+            },
+            final(callback) {
+              const data = finishDecrypt();
+              if (data === null) {
+                return callback(new Error("Decryption final failed."));
+              }
+              this.push(data);
+              callback();
+            },
+          });
+          request.raw.pipe(proxyPayload);
+        }
       }
 
       // make new request
-      let proxyResponse: void | AxiosResponse<any, any> = void 0;
+      let proxyResponse: void | fetch.Response = void 0;
       try {
-        proxyResponse = await axios({
+        proxyResponse = await fetch(options.upstream + "/" + decryptedUrl, {
           method: request.method,
-          url: options.upstream + request.url,
-          headers: proxyHeaders,
-          data: proxyPayload,
-          maxRedirects: 0,
-          responseType: "arraybuffer",
-          validateStatus: (status) => status < 400,
-          transformResponse: (data, _headers) => data,
+          headers: proxyHeaders as unknown as fetch.HeadersInit,
+          body: proxyPayload as any,
+          // @ts-ignore
+          duplex: "half",
         });
       } catch (error: any) {
         request.log.error(error);
@@ -309,106 +278,199 @@ function proxyHandler(
       );
 
       // create response headers
-      proxyResponse.headers["access-control-allow-credentials"] = "true";
-      proxyResponse.headers["access-control-allow-methods"] = reply.getHeader(
-        "access-control-allow-methods"
-      );
+      proxyResponse.headers.forEach((value, key) => {
+        reply.header(key, value);
+      });
 
-      // @ts-ignore
-      const proxyResponseHeaders = cloneHeaders(proxyResponse.headers);
-
-      // merge these headers with upstream server headers, if present
-      proxyResponseHeaders["access-control-allow-headers"] = (() => {
-        let value: string[] = [];
+      // merge access-control-allow-headers
+      (() => {
+        let values = new Set<string>();
+        values.add(options.encodedHeadersHeader);
+        values.add(options.mteRelayHeader);
         const replyHeader = reply.getHeader("access-control-allow-headers");
         if (replyHeader) {
-          value.push(makeHeaderAString(replyHeader));
+          String(replyHeader)
+            .split(",")
+            .forEach((header) => {
+              values.add(header.trim().toLowerCase());
+            });
         }
-        const proxyResponseHeader =
-          proxyResponse.headers["access-control-allow-headers"];
+        const proxyResponseHeader = proxyResponse.headers.get(
+          "access-control-allow-headers"
+        );
         if (proxyResponseHeader) {
-          value.push(makeHeaderAString(proxyResponseHeader));
+          String(proxyResponseHeader)
+            .split(",")
+            .forEach((header) => {
+              values.add(header.trim().toLowerCase());
+            });
         }
-        return value.join(", ");
+        reply.removeHeader("access-control-allow-headers");
+        const headerValue = Array.from(values).join(", ");
+        reply.header("access-control-allow-headers", headerValue);
       })();
-      proxyResponseHeaders["access-control-expose-headers"] = (() => {
-        let value: string[] = [];
+      // merge "access-control-expose-headers" header
+      (() => {
+        let values = new Set<string>();
+        values.add(options.encodedHeadersHeader);
+        values.add(options.mteRelayHeader);
         const replyHeader = reply.getHeader("access-control-expose-headers");
         if (replyHeader) {
-          value.push(makeHeaderAString(replyHeader));
+          String(replyHeader)
+            .split(",")
+            .forEach((header) => {
+              values.add(header.trim().toLowerCase());
+            });
         }
-        const proxyResponseHeader =
-          proxyResponse.headers["access-control-expose-headers"];
+        const proxyResponseHeader = proxyResponse.headers.get(
+          "access-control-expose-headers"
+        );
         if (proxyResponseHeader) {
-          value.push(makeHeaderAString(proxyResponseHeader));
+          String(replyHeader)
+            .split(",")
+            .forEach((header) => {
+              values.add(header.trim().toLowerCase());
+            });
         }
-        return value.join(", ");
+        // delete encoded headers from this header
+        Object.keys(decodedHeaders).forEach((header) => {
+          values.delete(header);
+        });
+        reply.removeHeader("access-control-expose-headers");
+        const headerValue = Array.from(values).join(", ");
+        reply.header("access-control-expose-headers", headerValue);
       })();
-      delete proxyResponseHeaders["content-length"];
-      delete proxyResponseHeaders["transfer-encoding"];
-      delete proxyResponseHeaders["access-control-allow-origin"];
-      proxyResponseHeaders[options.encodedHeadersHeader];
 
-      // cookies are a special case, just copy them over from the original request headers object
-      if (proxyResponse.headers["set-cookie"]) {
-        proxyResponseHeaders["set-cookie"] = proxyResponse.headers[
-          "set-cookie"
-        ] as unknown as string;
-      }
+      // don't forward these headers to client
+      const headerToDelete = [
+        "set-cookie",
+        "content-length",
+        "content-encoding",
+        options.mteRelayHeader,
+      ];
+      headerToDelete.forEach((header) => {
+        reply.removeHeader(header);
+      });
+
+      // copy cookies - they have a special implementation
+      proxyResponse.headers.raw()["set-cookie"]?.forEach((cookie) => {
+        reply.header("set-cookie", cookie);
+      });
 
       request.log.debug(
         `Proxy Response Headers - Modified:\n${proxyResponse.headers}`
       );
 
-      // encode headers
+      // collect data to be encoded
+      const itemsToEncode: {
+        data: string | Uint8Array;
+        output: "B64" | "Uint8Array" | "stream";
+      }[] = [];
+
+      // collect Headers to encode
       const headersToEncode: Record<string, string> = {};
-      const contentTypeHeader = proxyResponse.headers["content-type"];
+      Object.keys(decodedHeaders).forEach((key) => {
+        const value = proxyResponse?.headers.get(key);
+        if (value) {
+          headersToEncode[key] = value;
+          reply.removeHeader(key);
+        }
+      });
+      const contentTypeHeader = proxyResponse.headers.get("content-type");
       if (contentTypeHeader) {
         headersToEncode["content-type"] = contentTypeHeader;
       }
-      Object.entries(mkeDecodedHeaders).forEach(([key, value]) => {
-        headersToEncode[key] = value;
-      });
-      const encodedHeadersJson = JSON.stringify(headersToEncode);
-      const encodedResponseHeaders = await mkeEncode(encodedHeadersJson, {
-        stateId: `encoder.${request.clientId}.${request.pairId}`,
-        output: "B64",
-        type: request.encoderType,
-      }).catch((err) => {
-        throw new MteRelayError("Failed to encode.", err);
-      });
-      proxyResponseHeaders[options.encodedHeadersHeader] =
-        encodedResponseHeaders as string;
-
-      // copy proxyResponse headers to reply
-      reply.headers(proxyResponseHeaders);
-      reply.status(proxyResponse.status);
-
-      // if no body, send reply
-      const _body = proxyResponse.data;
-      if (!_body) {
-        return reply.send();
+      const hasEncodedHeaders = Object.keys(headersToEncode).length > 0;
+      if (hasEncodedHeaders) {
+        const encodedHeadersJson = JSON.stringify(headersToEncode);
+        itemsToEncode.push({ data: encodedHeadersJson, output: "B64" });
       }
 
-      // encode body
-      const encodedBody = await mkeEncode(_body, {
-        stateId: `encoder.${request.clientId}.${request.pairId}`,
-        output: "Uint8Array",
-        type: request.encoderType,
-      }).catch((err) => {
-        throw new MteRelayError("Failed to encode.", err);
-      });
-      const _buffer = Buffer.from(encodedBody as Uint8Array);
-      reply.send(_buffer);
-
-      // delete tmp files if they exist
-      if (tmpFilesToDelete.length > 0) {
-        tmpFilesToDelete.forEach((file) => {
-          fs.promises.rm(file).catch((err) => {
-            request.log.error(`Error deleting tmp file: ${err}`);
+      // encode body as stream
+      let bodyIsEncoded = true;
+      if (request.relayOptions.encodeType === "MTE") {
+        const buffer = await proxyResponse.arrayBuffer();
+        if (buffer.byteLength > 0) {
+          itemsToEncode.push({
+            data: new Uint8Array(buffer),
+            output: "Uint8Array",
           });
+        } else {
+          bodyIsEncoded = false;
+        }
+      } else {
+        itemsToEncode.push({
+          data: "stream",
+          output: "stream",
         });
       }
+
+      // encode response
+      const results = await encode({
+        id: `encoder.${request.relayOptions.clientId}.${request.relayOptions.pairId}`,
+        items: itemsToEncode,
+        type: request.relayOptions.encodeType!,
+      });
+
+      // attached encoded headers to response
+      if (hasEncodedHeaders) {
+        reply.header(options.encodedHeadersHeader, results[0] as string);
+        results.shift();
+      }
+
+      // set relay options header
+      const responseRelayOptions: RelayOptions = {
+        clientId: request.clientIdSigned,
+        pairId: request.relayOptions.pairId,
+        encodeType: request.relayOptions.encodeType,
+        urlIsEncoded: false,
+        headersAreEncoded: hasEncodedHeaders,
+        bodyIsEncoded: bodyIsEncoded,
+      };
+      const responseRelayOptionsHeader =
+        formatMteRelayHeader(responseRelayOptions);
+      reply.header(options.mteRelayHeader, responseRelayOptionsHeader);
+
+      // copy proxyResponse headers to reply
+      reply.status(proxyResponse.status);
+
+      // if body is encoded, update payload
+      let responseBody: any = null;
+      if (bodyIsEncoded && request.relayOptions.encodeType === "MTE") {
+        responseBody = results[0] as Uint8Array;
+      } else {
+        const returnData = results[0];
+        if ("encryptChunk" in returnData === false) {
+          throw new Error("Invalid return data.");
+        }
+        const { encryptChunk, finishEncrypt } = returnData;
+        responseBody = new Transform({
+          transform(chunk, _encoding, callback) {
+            try {
+              const u8 = new Uint8Array(chunk);
+              const encrypted = encryptChunk(u8);
+              if (encrypted === null) {
+                return callback(new Error("Encryption failed."));
+              }
+              this.push(encrypted);
+              callback();
+            } catch (error) {
+              callback(error as Error);
+            }
+          },
+          final(callback) {
+            const data = finishEncrypt();
+            if (data === null) {
+              return callback(new Error("Encryption final failed."));
+            }
+            this.push(data);
+            callback();
+          },
+        });
+        // @ts-ignore
+        proxyResponse.body?.pipe(responseBody);
+      }
+      return reply.send(responseBody);
     } catch (error) {
       request.log.error(error);
       if (error instanceof MteRelayError) {
@@ -427,17 +489,17 @@ function proxyHandler(
 
 export default proxyHandler;
 
-// determine if encoded content should be decoded to text or to UInt8Array
-function contentTypeIsText(contentType: string) {
-  const textsTypes = ["text", "json", "xml", "javascript", "urlencoded"];
-  const _lowerContentType = contentType.toLowerCase();
-  let i = 0;
-  const iMax = textsTypes.length;
-  for (; i < iMax; i++) {
-    const _type = textsTypes[i];
-    if (_lowerContentType.includes(_type)) {
-      return true;
-    }
-  }
-  return false;
+function readStreamToU8(stream: Readable) {
+  return new Promise<Uint8Array>((resolve, reject) => {
+    const chunks: Uint8Array[] = [];
+    stream.on("data", (chunk) => {
+      chunks.push(chunk);
+    });
+    stream.on("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
+    stream.on("error", (error) => {
+      reject(error);
+    });
+  });
 }

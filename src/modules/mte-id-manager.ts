@@ -3,13 +3,14 @@ import fastifyPlugin from "fastify-plugin";
 import crypto from "crypto";
 import { signAString, verifySignedString } from "../utils/signed-ids";
 import { MteRelayError } from "./mte/errors";
+import { RelayOptions, parseMteRelayHeader } from "../utils/mte-relay-header";
 
 // extend FastifyRequest interface with decorator method
 declare module "fastify" {
   interface FastifyRequest {
-    clientId: null | string;
-    pairId: null | string;
-    encoderType: "MKE" | "MTE";
+    relayOptions: RelayOptions;
+    clientIdSigned: string;
+    isOutbound: boolean;
   }
 }
 
@@ -23,64 +24,61 @@ declare module "fastify" {
  */
 const mteIdManager: FastifyPluginCallback<{
   clientIdSecret: string;
-  clientIdHeader: string;
-  sessionIdHeader: string;
-  pairIdHeader: string;
-  serverIdHeader: string;
-  mteServerId: string;
-  encoderTypeHeader: string;
+  mteRelayHeader: string;
+  outboundToken?: string;
 }> = (fastify, options, done) => {
-  fastify.decorateRequest("clientId", null);
-  fastify.decorateRequest("pairId", null);
-  fastify.decorateRequest("encoderType", "MKE");
+  // set default object for request.relayOptions
+  fastify.decorateRequest("relayOptions", null);
+  fastify.decorateRequest("outbound", false);
 
   // on every request
   fastify.addHook("onRequest", (request, reply, _done) => {
     try {
-      // get encoder type, mirror on response
-      const encoderType = request.headers[options.encoderTypeHeader] as string;
-      if (encoderType && ["MKE", "MTE"].includes(encoderType)) {
-        request.encoderType = encoderType as "MKE" | "MTE";
+      // outbound requests
+      if (options.outboundToken) {
+        request.isOutbound = false;
+        const outboundToken = request.headers["x-mte-outbound-token"] as string;
+        if (outboundToken) {
+          if (outboundToken !== options.outboundToken) {
+            return reply.status(401).send("Invalid outbound token.");
+          } else {
+            request.isOutbound = true;
+            return _done();
+          }
+        }
       }
-      reply.header(options.encoderTypeHeader, request.encoderType);
 
-      // add x-mte-relay-server-id header to the every response
-      reply.header(options.serverIdHeader, options.mteServerId);
+      // default to empty object
+      request.relayOptions = {};
 
-      // get x-mte-relay-client-id header from request
-      // if it exists, verify it, else set a new ID
-      const clientIdHeader = request.headers[options.clientIdHeader] as string;
-      let clientId: string = crypto.randomUUID();
-      if (clientIdHeader) {
+      // parse x-mte-relay header from request
+      const mteRelayHeader = request.headers[options.mteRelayHeader] as string;
+      if (mteRelayHeader) {
+        request.relayOptions = parseMteRelayHeader(mteRelayHeader);
+      }
+      // use existing clientId, or generate a new one
+      if (request.relayOptions.clientId) {
         const verified = verifySignedString(
-          clientIdHeader,
+          request.relayOptions.clientId,
           options.clientIdSecret
         );
         if (!verified) {
-          request.log.error(`Invalid ${options.clientIdHeader} header.`);
+          request.log.error(
+            `Invalid Client ID: ${request.relayOptions.clientId}`
+          );
           throw new MteRelayError("Invalid Client ID header.");
         }
-        clientId = verified;
-      }
-
-      // set x-mte-relay-client-id header on every response
-      const signedClientId = signAString(clientId, options.clientIdSecret);
-      reply.header(options.clientIdHeader, signedClientId);
-
-      // use x-mte-relay-client-id header to decorate request object with clientId
-      request.clientId = clientId;
-
-      // pair ID is clientId OR clientId.sessionId
-      let pairId = request.headers[options.pairIdHeader] as string;
-      if (pairId) {
-        reply.header(options.pairIdHeader, pairId);
+        request.relayOptions.clientId = verified;
       } else {
-        pairId = request.headers[options.sessionIdHeader] as string;
-        reply.header(options.sessionIdHeader, pairId);
+        request.relayOptions.clientId = crypto.randomUUID();
       }
-      if (pairId) {
-        request.pairId = pairId;
-      }
+
+      // create signed clientId
+      const signedClientId = signAString(
+        request.relayOptions.clientId,
+        options.clientIdSecret
+      );
+      request.clientIdSigned = signedClientId;
     } catch (error) {
       request.log.error(error);
       if (error instanceof MteRelayError) {

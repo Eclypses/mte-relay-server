@@ -17,7 +17,7 @@ module.exports = async function () {
             reject(err);
           }
           /**
-           * Encoder State must be locked or removed from cache when in use
+           * Encoder State must be removed from cache when in use
            *  - Prevents the same encoder state from being used more than once.
            * This is not true for decoders; their state should be left in cache even when in use.
            */
@@ -36,6 +36,7 @@ module.exports = async function () {
     },
     saveState: function (id, state) {
       return new Promise((resolve, reject) => {
+        // save state, expires in 24 hours (in seconds)
         memcached.set(id, state, 86400, function (err) {
           if (err) {
             console.log(err);
