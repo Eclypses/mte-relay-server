@@ -29,7 +29,7 @@
     "zod": "^3.21.4"
   },
   "peerDependencies": {
-    "mte": ">=3.0.0 <5.0.0"
+    "mte": "^4.0.0"
   },
   "devDependencies": {
     "@autotelic/pino-seq-transport": "^0.1.0",
