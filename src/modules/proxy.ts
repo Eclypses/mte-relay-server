@@ -277,6 +277,9 @@ function proxyHandler(
         `Proxy Response Headers - Original:\n${proxyResponse.headers}`
       );
 
+      // delete this header, Relay Server set's it's own.
+      proxyResponse.headers.delete("access-control-allow-origin");
+
       // create response headers
       proxyResponse.headers.forEach((value, key) => {
         reply.header(key, value);
