@@ -83,7 +83,6 @@ let server: FastifyInstance | null = null;
 
     await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });
     console.log(`Server listening on port ${SETTINGS.PORT}`);
-    console.log(`Custom server build #29`);
   } catch (err) {
     console.log(err);
     server?.log.error(err);
