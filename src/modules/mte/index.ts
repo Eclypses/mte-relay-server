@@ -19,7 +19,7 @@ type EncDecTypes = "MTE" | "MKE";
 
 let mteWasm: MteWasm;
 
-const cache = {
+export const cache = {
   saveState: setItem,
   takeState: takeItem,
 };
@@ -391,8 +391,7 @@ export function getKyberInitiator() {
     if (result.status !== MteKyberStatus.success) {
       throw new Error("Initiator: Failed to decrypt the secret.");
     }
-    const secret = u8ToB64(result.result1!);
-    return secret;
+    return result.result1!;
   }
 
   return {

@@ -7,7 +7,9 @@ export const MTE_ERRORS = {
   "DRBG reseed is required.": 564,
   "MTE Status was not successful.": 565,
   "Invalid Client ID header.": 566,
-  "PairID is required, but not found.": 567,
+  "Failed to save decoder stateId.": 567,
+  "Failed to save encoder stateId.": 568,
+  "Missing required header": 569,
 } as const;
 
 const statusCodes: Set<number> = new Set(Object.values(MTE_ERRORS));
@@ -35,5 +37,16 @@ export class MteRelayError extends Error {
       }
     }
     return undefined;
+  }
+}
+
+export class MteFetchError extends Error {
+  public status: number;
+  public info?: any;
+
+  constructor(message: string, status: number, info?: any) {
+    super(message);
+    this.status = status;
+    this.info = info;
   }
 }
