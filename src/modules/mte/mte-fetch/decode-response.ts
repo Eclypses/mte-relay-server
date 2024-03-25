@@ -1,6 +1,6 @@
 import { Response, BodyInit } from "node-fetch";
 import { MteRelayError } from "../errors";
-import { decode } from "../index";
+import { decode, finishEncryptBytes } from "../index";
 import { parseMteRelayHeader } from "../../../utils/mte-relay-header";
 
 export async function decodeResponse(
@@ -36,7 +36,9 @@ export async function decodeResponse(
   // get body to decode
   if (relayOptions.bodyIsEncoded) {
     const u8 = new Uint8Array(await response.arrayBuffer());
-    itemsToDecode.push({ data: u8, output: "Uint8Array" });
+    if (u8.byteLength > finishEncryptBytes) {
+      itemsToDecode.push({ data: u8, output: "Uint8Array" });
+    }
   }
 
   // decode items
@@ -45,7 +47,6 @@ export async function decodeResponse(
     items: itemsToDecode,
     type: relayOptions.encodeType!,
   });
-  debugger;
 
   // create new response headers
   const newHeaders: Record<string, string | string[]> = {};

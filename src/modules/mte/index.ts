@@ -18,6 +18,7 @@ import { MteRelayError } from "./errors";
 type EncDecTypes = "MTE" | "MKE";
 
 let mteWasm: MteWasm;
+export let finishEncryptBytes = 0;
 
 export const cache = {
   saveState: setItem,
@@ -128,6 +129,9 @@ export async function instantiateMteWasm(options: {
     cache.takeState = options.takeState;
   }
   fillPools(options.encoderDecoderPoolSize);
+  const mkeEncoder = getEncoderFromPool("MKE");
+  finishEncryptBytes = (mkeEncoder as MteMkeEnc).encryptFinishBytes();
+  returnEncoderToPool(mkeEncoder);
 }
 export async function instantiateEncoder(options: {
   id: string;

@@ -102,7 +102,9 @@ export async function encodeRequest(
     clientId: options.clientId,
     pairId: options.pairId,
   });
-  newHeaders["content-type"] = "application/octet-stream";
+  if (bodyIsEncoded) {
+    newHeaders["content-type"] = "application/octet-stream";
+  }
   if (encodeHeaders) {
     newHeaders[options.mteEncodedHeadersHeader] = result[0] as string;
     result.shift();

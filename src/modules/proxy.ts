@@ -555,6 +555,14 @@ async function outboundRequestHandler(
     if (error instanceof MteFetchError) {
       return reply.status(error.status).send(error.message);
     }
+    let msg = "An unknown error occurred.";
+    if (typeof error === "string") {
+      msg = error;
+    }
+    if (error instanceof Error) {
+      msg = error.message;
+    }
+    return reply.status(500).send(msg);
   }
   // copy headers
   response.headers.forEach((value, key) => {
