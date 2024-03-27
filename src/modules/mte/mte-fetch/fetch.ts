@@ -213,7 +213,6 @@ async function sendMteRequest(
     }
 
     // else return error
-    debugger;
     if (error instanceof Error) {
       throw error;
     }

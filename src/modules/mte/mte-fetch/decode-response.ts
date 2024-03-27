@@ -1,7 +1,8 @@
-import { Response, BodyInit } from "node-fetch";
+import { Response } from "node-fetch";
 import { MteRelayError } from "../errors";
 import { decode, finishEncryptBytes } from "../index";
 import { parseMteRelayHeader } from "../../../utils/mte-relay-header";
+import { Transform } from "stream";
 
 export async function decodeResponse(
   response: Response,
@@ -22,7 +23,7 @@ export async function decodeResponse(
   // store items that should be decoded
   const itemsToDecode: {
     data: string | Uint8Array;
-    output: "str" | "Uint8Array";
+    output: "str" | "Uint8Array" | "stream";
   }[] = [];
 
   // get headers to decode
@@ -35,9 +36,13 @@ export async function decodeResponse(
 
   // get body to decode
   if (relayOptions.bodyIsEncoded) {
-    const u8 = new Uint8Array(await response.arrayBuffer());
-    if (u8.byteLength > finishEncryptBytes) {
-      itemsToDecode.push({ data: u8, output: "Uint8Array" });
+    if (relayOptions.encodeType === "MTE") {
+      const u8 = new Uint8Array(await response.arrayBuffer());
+      if (u8.byteLength > finishEncryptBytes) {
+        itemsToDecode.push({ data: u8, output: "Uint8Array" });
+      }
+    } else {
+      itemsToDecode.push({ data: "stream", output: "stream" });
     }
   }
 
@@ -64,10 +69,41 @@ export async function decodeResponse(
   }
 
   // create new response body
-  let newBody: BodyInit | undefined = response.body || undefined;
-  debugger;
+  let newBody: any = response.body || undefined;
   if (relayOptions.bodyIsEncoded) {
-    newBody = result[0] as Uint8Array;
+    if (relayOptions.encodeType === "MTE") {
+      newBody = result[0] as Uint8Array;
+    } else {
+      const returnData = result[0];
+      if ("decryptChunk" in returnData === false) {
+        throw new Error("Invalid return data.");
+      }
+      const { decryptChunk, finishDecrypt } = returnData;
+      newBody = new Transform({
+        transform(chunk, _encoding, callback) {
+          try {
+            const u8 = new Uint8Array(chunk);
+            const encrypted = decryptChunk(u8);
+            if (encrypted === null) {
+              return callback(new Error("Encryption failed."));
+            }
+            this.push(encrypted);
+            callback();
+          } catch (error) {
+            callback(error as Error);
+          }
+        },
+        final(callback) {
+          const data = finishDecrypt();
+          if (data === null) {
+            return callback(new Error("Encryption final failed."));
+          }
+          this.push(data);
+          callback();
+        },
+      });
+      response.body.pipe(newBody);
+    }
   }
 
   // form new response

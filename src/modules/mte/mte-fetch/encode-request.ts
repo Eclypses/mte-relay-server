@@ -1,5 +1,6 @@
-import fetch, { Request } from "node-fetch";
+import { Request } from "node-fetch";
 import { encode } from "..";
+import { Transform } from "stream";
 import { formatMteRelayHeader } from "../../../utils/mte-relay-header";
 
 type EncDecType = "MTE" | "MKE";
@@ -19,7 +20,7 @@ export async function encodeRequest(
 ): Promise<Request> {
   const itemsToEncode: {
     data: string | Uint8Array;
-    output: "B64" | "Uint8Array";
+    output: "B64" | "Uint8Array" | "stream";
   }[] = [];
 
   // get route to encode
@@ -40,6 +41,7 @@ export async function encodeRequest(
   delete newHeaders["host"];
   delete newHeaders["accept"];
   delete newHeaders["accept-encoding"];
+  delete newHeaders["content-length"];
   delete newHeaders["connection"];
   const headersToEncode: Record<string, string | string[]> = {};
   let encodeHeaders = options.encodeHeaders ?? true;
@@ -72,11 +74,20 @@ export async function encodeRequest(
   }
 
   // get body to encode
-  const body = new Uint8Array(await request.arrayBuffer());
+  let body: any = "";
   let bodyIsEncoded = false;
-  if (body.byteLength > 0) {
-    bodyIsEncoded = true;
-    itemsToEncode.push({ data: body, output: "Uint8Array" });
+  const mayHaveBody = request.method !== "GET" && request.method !== "HEAD";
+  if (mayHaveBody) {
+    if (options.type === "MTE") {
+      body = new Uint8Array(await request.arrayBuffer());
+      if (body.byteLength > 0) {
+        bodyIsEncoded = true;
+        itemsToEncode.push({ data: body, output: "Uint8Array" });
+      }
+    } else {
+      itemsToEncode.push({ data: "stream", output: "stream" });
+      bodyIsEncoded = true;
+    }
   }
 
   // encode items
@@ -113,7 +124,39 @@ export async function encodeRequest(
   // create new request body
   let newRequestBody = request.body ? body : undefined;
   if (bodyIsEncoded) {
-    newRequestBody = result[0] as Uint8Array;
+    if (options.type === "MTE") {
+      newRequestBody = result[0] as Uint8Array;
+    } else {
+      const returnData = result[0];
+      if ("encryptChunk" in returnData === false) {
+        throw new Error("Invalid return data.");
+      }
+      const { encryptChunk, finishEncrypt } = returnData;
+      newRequestBody = new Transform({
+        transform(chunk, _encoding, callback) {
+          try {
+            const u8 = new Uint8Array(chunk);
+            const encrypted = encryptChunk(u8);
+            if (encrypted === null) {
+              return callback(new Error("Encryption failed."));
+            }
+            this.push(encrypted);
+            callback();
+          } catch (error) {
+            callback(error as Error);
+          }
+        },
+        final(callback) {
+          const data = finishEncrypt();
+          if (data === null) {
+            return callback(new Error("Encryption final failed."));
+          }
+          this.push(data);
+          callback();
+        },
+      });
+      request.body.pipe(newRequestBody);
+    }
   }
 
   // form new request
