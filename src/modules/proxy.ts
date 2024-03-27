@@ -4,13 +4,14 @@ import {
   FastifyReply,
   HTTPMethods,
 } from "fastify";
-import fetch from "node-fetch";
+import fetch, { Request, Response } from "node-fetch";
 import { Readable } from "stream";
 import { decode, encode } from "./mte";
 import mteIdManager from "./mte-id-manager";
-import { MteRelayError } from "./mte/errors";
+import { MteFetchError, MteRelayError } from "./mte/errors";
 import { Transform } from "stream";
 import { RelayOptions, formatMteRelayHeader } from "../utils/mte-relay-header";
+import { mteFetch } from "./mte/mte-fetch/fetch";
 
 function proxyHandler(
   fastify: FastifyInstance,
@@ -51,7 +52,7 @@ function proxyHandler(
       return reply.status(401).send("Unauthorized");
     }
     if (!request.relayOptions.pairId) {
-      const err = new MteRelayError("PairID is required, but not found.");
+      const err = new MteRelayError("Missing required header");
       request.log.error(err.message);
       return reply.status(err.status).send(err.message);
     }
@@ -92,25 +93,10 @@ function proxyHandler(
     try {
       // determine if authorized outbound-proxy, ELSE if inbound-proxy
       if (request.isOutbound) {
-        const upstream = request.headers["x-mte-upstream"] as string;
-        if (!upstream) {
-          return reply.status(400).send("Missing x-mte-upstream header.");
-        }
-        const _request = new Request(upstream + request.url, {
-          method: request.method,
-          // @ts-ignore - this is fine, i think
-          headers: request.headers,
-          body: request.raw as unknown as ReadableStream<Uint8Array>,
+        return outboundRequestHandler(request, reply, {
+          encodedHeadersHeader: options.encodedHeadersHeader,
+          mteRelayHeader: options.mteRelayHeader,
         });
-        //@ts-ignore
-        const response = await fetch(_request);
-        //@ts-ignore
-        const _response = new Response(response.body, {
-          status: response.status,
-          statusText: response.statusText,
-          headers: response.headers,
-        });
-        return _response;
       }
 
       const itemsToDecode: {
@@ -277,6 +263,9 @@ function proxyHandler(
         `Proxy Response Headers - Original:\n${proxyResponse.headers}`
       );
 
+      // delete this header, Relay Server set's it's own.
+      proxyResponse.headers.delete("access-control-allow-origin");
+
       // create response headers
       proxyResponse.headers.forEach((value, key) => {
         reply.header(key, value);
@@ -436,39 +425,41 @@ function proxyHandler(
 
       // if body is encoded, update payload
       let responseBody: any = null;
-      if (bodyIsEncoded && request.relayOptions.encodeType === "MTE") {
-        responseBody = results[0] as Uint8Array;
-      } else {
-        const returnData = results[0];
-        if ("encryptChunk" in returnData === false) {
-          throw new Error("Invalid return data.");
-        }
-        const { encryptChunk, finishEncrypt } = returnData;
-        responseBody = new Transform({
-          transform(chunk, _encoding, callback) {
-            try {
-              const u8 = new Uint8Array(chunk);
-              const encrypted = encryptChunk(u8);
-              if (encrypted === null) {
-                return callback(new Error("Encryption failed."));
+      if (bodyIsEncoded) {
+        if (request.relayOptions.encodeType === "MTE") {
+          responseBody = results[0] as Uint8Array;
+        } else {
+          const returnData = results[0];
+          if ("encryptChunk" in returnData === false) {
+            throw new Error("Invalid return data.");
+          }
+          const { encryptChunk, finishEncrypt } = returnData;
+          responseBody = new Transform({
+            transform(chunk, _encoding, callback) {
+              try {
+                const u8 = new Uint8Array(chunk);
+                const encrypted = encryptChunk(u8);
+                if (encrypted === null) {
+                  return callback(new Error("Encryption failed."));
+                }
+                this.push(encrypted);
+                callback();
+              } catch (error) {
+                callback(error as Error);
               }
-              this.push(encrypted);
+            },
+            final(callback) {
+              const data = finishEncrypt();
+              if (data === null) {
+                return callback(new Error("Encryption final failed."));
+              }
+              this.push(data);
               callback();
-            } catch (error) {
-              callback(error as Error);
-            }
-          },
-          final(callback) {
-            const data = finishEncrypt();
-            if (data === null) {
-              return callback(new Error("Encryption final failed."));
-            }
-            this.push(data);
-            callback();
-          },
-        });
-        // @ts-ignore
-        proxyResponse.body?.pipe(responseBody);
+            },
+          });
+          // @ts-ignore
+          proxyResponse.body?.pipe(responseBody);
+        }
       }
       return reply.send(responseBody);
     } catch (error) {
@@ -502,4 +493,80 @@ function readStreamToU8(stream: Readable) {
       reject(error);
     });
   });
+}
+
+async function outboundRequestHandler(
+  request: FastifyRequest,
+  reply: FastifyReply,
+  options: { encodedHeadersHeader: string; mteRelayHeader: string }
+) {
+  const upstream = request.headers["x-mte-upstream"] as string;
+  if (!upstream) {
+    return reply.status(400).send("Missing x-mte-upstream header.");
+  }
+  let encodeType: "MKE" | "MTE" = "MKE";
+  const encodeTypeHeader = request.headers["x-mte-encode-type"] as string;
+  if (encodeTypeHeader) {
+    encodeType = encodeTypeHeader as "MKE" | "MTE";
+  }
+  let encodeHeaders: boolean | string[] = true;
+  const encodeHeaderHeader = request.headers["x-mte-encode-headers"] as
+    | string
+    | string[];
+  if (encodeHeaderHeader) {
+    if (Array.isArray(encodeHeaderHeader)) {
+      encodeHeaders = encodeHeaderHeader;
+    } else {
+      encodeHeaders = encodeHeaderHeader === "true";
+    }
+  }
+  let encodeUrl: boolean = true;
+  const encodeUrlHeader = request.headers["x-mte-encode-url"] as string;
+  if (encodeUrlHeader) {
+    encodeUrl = encodeUrlHeader === "true";
+  }
+  const _request = new Request(upstream + request.url, {
+    method: request.method,
+    // @ts-ignore - this is fine, i think
+    headers: request.headers,
+    body: (() => {
+      if (["GET", "HEAD"].includes(request.method)) {
+        return undefined;
+      }
+      return request.raw as unknown as any;
+    })(),
+  });
+  let response: fetch.Response = new Response();
+  try {
+    response = await mteFetch(
+      _request,
+      {
+        mteEncodedHeadersHeader: options.encodedHeadersHeader,
+        relayHeader: options.mteRelayHeader,
+      },
+      undefined,
+      {
+        encodeType,
+        encodeHeaders,
+        encodeUrl,
+      }
+    );
+  } catch (error) {
+    if (error instanceof MteFetchError) {
+      return reply.status(error.status).send(error.message);
+    }
+    let msg = "An unknown error occurred.";
+    if (typeof error === "string") {
+      msg = error;
+    }
+    if (error instanceof Error) {
+      msg = error.message;
+    }
+    return reply.status(500).send(msg);
+  }
+  // copy headers
+  response.headers.forEach((value, key) => {
+    reply.header(key, value);
+  });
+  return reply.send(response.body);
 }

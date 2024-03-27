@@ -18,8 +18,9 @@ import { MteRelayError } from "./errors";
 type EncDecTypes = "MTE" | "MKE";
 
 let mteWasm: MteWasm;
+export let finishEncryptBytes = 0;
 
-const cache = {
+export const cache = {
   saveState: setItem,
   takeState: takeItem,
 };
@@ -128,6 +129,9 @@ export async function instantiateMteWasm(options: {
     cache.takeState = options.takeState;
   }
   fillPools(options.encoderDecoderPoolSize);
+  const mkeEncoder = getEncoderFromPool("MKE");
+  finishEncryptBytes = (mkeEncoder as MteMkeEnc).encryptFinishBytes();
+  returnEncoderToPool(mkeEncoder);
 }
 export async function instantiateEncoder(options: {
   id: string;
@@ -391,8 +395,7 @@ export function getKyberInitiator() {
     if (result.status !== MteKyberStatus.success) {
       throw new Error("Initiator: Failed to decrypt the secret.");
     }
-    const secret = u8ToB64(result.result1!);
-    return secret;
+    return result.result1!;
   }
 
   return {

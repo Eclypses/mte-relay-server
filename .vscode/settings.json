@@ -9,7 +9,7 @@
     "fromdefault",
     "Keypair",
     "proxied",
-    "uninstantiate",
-    "Fargate"
+    "serverside",
+    "uninstantiate"
   ]
 }
