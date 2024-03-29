@@ -15,8 +15,8 @@
  * MTE_ROUTES='/api/v1/*,/api/v2/*'
  * CORS_METHODS='GET,POST,DELETE'
  * HEADERS='{"x-service-name":"mte-relay"}'
- * SERVER_ID='2DkV4DDabehO8cifDktdF9elKJL0CKrk'
- * MAX_FORM_DATA_SIZE=20971520
+ * MAX_POOL_SIZE=25
+ * OUTBOUND_TOKEN='abcdefg1234567`
  */
 
 module.exports = async function () {
@@ -56,8 +56,8 @@ module.exports = async function () {
     addSetting("mteRoutes", "MTE_ROUTES", "array");
     addSetting("corsMethods", "CORS_METHODS", "array");
     addSetting("headers", "HEADERS", "json");
-    addSetting("serverId", "SERVER_ID");
-    addSetting("maxFormDataSize", "MAX_FORM_DATA_SIZE", "number");
+    addSetting("maxPoolSize", "MAX_POOL_SIZE", "number");
+    addSettings("outbound", "OUTBOUND_TOKEN");
 
     return settings;
   } catch (error) {
