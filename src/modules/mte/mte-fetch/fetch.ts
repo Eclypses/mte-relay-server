@@ -1,6 +1,6 @@
 import fetch, { Request, RequestInfo, RequestInit, Response } from "node-fetch";
 import { mteFetchDefaults } from "./settings";
-import { MteFetchError, MteRelayError } from "../errors";
+import { MteRelayError } from "../errors";
 import {
   OriginStatus,
   getClientId,
@@ -159,16 +159,6 @@ async function sendMteRequest(
      * Send the request
      */
     let response = await fetch(encodedRequest);
-    if (!response.ok) {
-      if (MteRelayError.isMteErrorStatus(response.status)) {
-        const msg = MteRelayError.getStatusErrorMessages(response.status);
-        if (msg) {
-          throw new MteRelayError(msg);
-        }
-      }
-      const text = await response.text();
-      throw new MteFetchError(text, response.status);
-    }
 
     // parse header for clientId, then save it as a cookie
     const mteRelayHeader = response.headers.get(mteHeaders.relayHeader);
