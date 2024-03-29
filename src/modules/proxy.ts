@@ -568,5 +568,7 @@ async function outboundRequestHandler(
   response.headers.forEach((value, key) => {
     reply.header(key, value);
   });
+  // copy status
+  reply.status(response.status);
   return reply.send(response.body);
 }
