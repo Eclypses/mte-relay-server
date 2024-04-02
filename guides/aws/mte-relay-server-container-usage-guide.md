@@ -165,18 +165,18 @@ _The following configuration variables have default values. If the customer does
 - `DEBUG`
   - A flag that enables debug logging.
   - Default: `false`
-- `PASS\_THROUGH\_ROUTES`
+- `PASSTHROUGH_ROUTES`
   - A list of routes that will be passed through to the upstream application without being MTE encoded/decoded.
   - example: "/some_route_that_is_not_secret"
-- `MTE\_ROUTES`
-  - A list of routes that will be MTE encoded/decoded. If this optional property is included, only the routes listed will be MTE encoded/decoded, and any routes not listed here or in `PASS\_THROUGH\_ROUTES` will 404. If this optional property is not included, all routes not listed in `PASS\_THROUGH\_ROUTES` will be MTE encoded/decoded.
-- `CORS\_METHODS`
+- `MTE_ROUTES`
+  - A list of routes that will be MTE encoded/decoded. If this optional property is included, only the routes listed will be MTE encoded/decoded, and any routes not listed here or in `PASS_THROUGH_ROUTES` will 404. If this optional property is not included, all routes not listed in `PASSTHROUGH_ROUTES` will be MTE encoded/decoded.
+- `CORS_METHODS`
   - A list of HTTP methods that will be allowed to make cross-origin requests to the server.
   - Default: `GET, POST, PUT, DELETE`.
   - Note: `OPTIONS` and `HEAD` are always allowed.
 - `HEADERS`
   - An object of headers that will be added to all request/responses.
-- `MAX\_POOL\_SIZE`
+- `MAX_POOL_SIZE`
   - The number of encoder objects and decoder objects held in a pool. A larger pool will consume more memory, but it will also handle more traffic more quickly. This number is applied to all four pools; the MTE Encoder, MTE Decoder, MKE Encoder, and MKE Decoder pools.
   - Default: `25`
 
