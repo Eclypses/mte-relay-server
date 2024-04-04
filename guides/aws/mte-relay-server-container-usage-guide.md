@@ -221,25 +221,25 @@ maxPoolSize: 10
 - [AWS Retrieve Secrets Manager Secrets](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/secrets-envvar-secrets-manager.html)
 #### Minimal Configuration Example
 ```env
-UPSTREAM=https://api.my-company.com
-CLIENT_ID_SECRET=2DkV4DDabehO8cifDktdF9elKJL0CKrk
-CORS_ORIGINS=https://www.my-company.com,https://dashboard.my-company.com
-REDIS_URL=redis://10.0.1.230:6379
+UPSTREAM='https://api.my-company.com'
+CLIENT_ID_SECRET='2DkV4DDabehO8cifDktdF9elKJL0CKrk'
+CORS_ORIGINS='https://www.my-company.com,https://dashboard.my-company.com'
+REDIS_URL='redis://10.0.1.230:6379'
 ```
 
 #### Full Configuration Example
 
 ```env
-UPSTREAM=https://api.my-company.com
-CLIENT_ID_SECRET=2DkV4DDabehO8cifDktdF9elKJL0CKrk
-CORS_ORIGINS=https://www.my-company.com,https://dashboard.my-company.com
-REDIS_URL=redis://10.0.1.230:6379
-PORT: 3000
-DEBUG: true
-PASSTHROUGH_ROUTES=/health,/version
-MTE_ROUTES=/api/v1/*,/api/v2/*
-CORS_METHODS=GET,POST,DELETE
-HEADERS=x-service-name:mte-relay
+UPSTREAM='https://api.my-company.com'
+CLIENT_ID_SECRET='2DkV4DDabehO8cifDktdF9elKJL0CKrk'
+CORS_ORIGINS='https://www.my-company.com,https://dashboard.my-company.com'
+REDIS_URL='redis://10.0.1.230:6379'
+PORT=3000
+DEBUG=true
+PASSTHROUGH_ROUTES='/health,/version'
+MTE_ROUTES='/api/v1/*,/api/v2/*'
+CORS_METHODS='GET,POST,DELETE'
+HEADERS='{"x-service-name":"mte-relay"}'
 MAX_POOL_SIZE=10
 ```
 
