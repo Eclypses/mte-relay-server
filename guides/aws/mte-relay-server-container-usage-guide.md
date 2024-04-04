@@ -70,6 +70,8 @@ In an ideal situation, a customer will already have (or plan to create):
 - A [web application](#client-side-implementation) with a JavaScript front-end or a mobile application using WebView.
 - A RESTful Web API back-end.
 
+![Typical Use Case](/guides/aws/diagrams/mte-relay-use-case.png)
+
 ### When completed, the following services and resources will be set up:
 
 | **Service** | **Required** | **Purpose** |
@@ -140,17 +142,14 @@ The MTE Relay is configurable using the following **environment variables** :
 - `UPSTREAM`
   - **Required**
   - The upstream application IP address, ingress, or URL that inbound requests will be proxied to.
-- `CORS\_ORIGINS`
+- `CORS_ORIGINS`
   - **Required**
   - A comma-separated list of URLs that will be allowed to make cross-origin requests to the server.
-- `SERVER\_ID`
-  - **Required**
-  - A GUID or otherwise unique string; 32+ character is recommended. Use this when load balancing multiple instances of MTE Relay Server so they all have the same server ID.
-- `CLIENT\_ID\_SECRET`
+- `CLIENT_ID_SECRET`
   - **Required**
   - A secret that will be used to sign the x-mte-client-id header. A 32+ character string is recommended.
   - Note: This will allow you to personalize your client/server relationship.
-- `REDIS\_URL`
+- `REDIS_URL`
   - **Required**
   - The entry point to your Redis ElastiCache cluster.
 
@@ -179,18 +178,16 @@ _The following configuration variables have default values. If the customer does
 - `MAX_POOL_SIZE`
   - The number of encoder objects and decoder objects held in a pool. A larger pool will consume more memory, but it will also handle more traffic more quickly. This number is applied to all four pools; the MTE Encoder, MTE Decoder, MKE Encoder, and MKE Decoder pools.
   - Default: `25`
-
-#### Minimal Configuration Example
+### YAML Configuration Examples
 [AWS Task Definition Parameters](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/taskdef-envfiles.html)
-
+#### Minimal Configuration Example
 ```yaml
 upstream: https://api.my-company.com
 clientIdSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
 corsOrigins:
   - https://www.my-company.com
   - https://dashboard.my-company.com
-serverId: 5211485B-7FF3-4B80-BD1B-FADC3B527C35
-redisURL: 10.0.1.230:6379
+redisURL: redis://10.0.1.230:6379
 ```
 
 #### Full Configuration Example
@@ -201,8 +198,7 @@ clientIdSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
 corsOrigins:
   - https://www.my-company.com
   - https://dashboard.my-company.com
-serverId: 5211485B-7FF3-4B80-BD1B-FADC3B527C35
-redisURL: 10.0.1.230:6379
+redisURL: redis://10.0.1.230:6379
 port: 3000
 debug: true
 passThroughRoutes:
@@ -218,6 +214,33 @@ corsMethods:
 headers:
   x-service-name: mte-relay
 maxPoolSize: 10
+```
+
+### ENV Configuration Examples
+- [AWS Task Definition Environment File](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/use-environment-file.html)
+- [AWS Retrieve Secrets Manager Secrets](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/secrets-envvar-secrets-manager.html)
+#### Minimal Configuration Example
+```env
+UPSTREAM=https://api.my-company.com
+CLIENT_ID_SECRET=2DkV4DDabehO8cifDktdF9elKJL0CKrk
+CORS_ORIGINS=https://www.my-company.com,https://dashboard.my-company.com
+REDIS_URL=redis://10.0.1.230:6379
+```
+
+#### Full Configuration Example
+
+```env
+UPSTREAM=https://api.my-company.com
+CLIENT_ID_SECRET=2DkV4DDabehO8cifDktdF9elKJL0CKrk
+CORS_ORIGINS=https://www.my-company.com,https://dashboard.my-company.com
+REDIS_URL=redis://10.0.1.230:6379
+PORT: 3000
+DEBUG: true
+PASSTHROUGH_ROUTES=/health,/version
+MTE_ROUTES=/api/v1/*,/api/v2/*
+CORS_METHODS=GET,POST,DELETE
+HEADERS=x-service-name:mte-relay
+MAX_POOL_SIZE=10
 ```
 
 ### Database Credentials:
@@ -351,13 +374,7 @@ ECS will run the MTE Relay container and dynamically scale it when required. To 
     - It is an essential container
 7. Port Mappings
     - Container runs on port 8080 for HTTP traffic
-8. Provide required Environment Variables.
-_[AWS - Use a file to pass Environment variables](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/use-environment-file.html)_
-    - UPSTREAM - The upstream server to proxy decoded requests to. This should be in the same VPC.
-    - CORS\_ORIGINS - A comma-separated list of CORs origins that can make requests to this Relay Server.
-    - SERVER\_ID - A GUID or otherwise unique string; 32+ character is recommended.
-    - CLIENT\_ID\_SECRET - A secret string used for signing cookies; a 32+ character string is recommended.
-    - REDIS\_URL - The entry point to your Redis ElastiCache cluster.
+8. Provide [Required Environment Variables](#required-configuration-variables)
     - Additional environment variables can be set. Please see [MTE Relay Server Docs](#optional-configuration-variables) for more info.
 9. Select to export logs to AWS Cloud Watch
     - Create a new CloudWatch log group, and select the same region your MTE Relay Server is running in.
