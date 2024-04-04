@@ -14,12 +14,12 @@ The MTE Relay Server is a NodeJS application that decodes and proxies HTTP paylo
    * [Technical](#technical)
    * [Skills or Specialized Knowledge](#skills-or-specialized-knowledge)
    * [Configuration](#configuration)
-      + [Other configuration variables](#other-configuration-variables)
+      + [Required Configuration variables](#required-configuration-variables)
+      + [Optional Configuration variables](#optional-configuration-variables)
       + [Database Credentials](#database-credentials)
       + [Key/Variable Rotation Recommendations](#keyvariable-rotation-recommendations)
 - [Architecture Diagrams](#architecture-diagrams)
    * [Default Deployment - ECS Deployment](#default-deployment-ecs-deployment-ecs-deployment)
-   * [Alternative Deployment - EC2 Deployment – Single Container](#alternative-deployment-ec2-deployment-single-container-ec2-deployment-single-container)
    * [Alternative Deployment - EKS Deployment – Multiple Load- Balanced Containers](#alternative-deployment-eks-deployment-multiple-load-balanced-containers-eks-deployment-multiple-load-balanced-containers)
 - [Security](#security)
    * [AWS Identity and Access Management (IAM) Roles:](#aws-identity-and-access-management-iam-roles)
@@ -61,7 +61,7 @@ The MTE Relay Server is a NodeJS application that decodes and proxies HTTP paylo
 
 # Customer Deployment
 
-The MTE Relay Server is typically used to decode HTTP Requests from a browser-based web application (or mobile WebView) and proxy the decoded request to the intended API. In AWS, the MTE Relay Server container can be orchestrated as a single or multi-container in an ECS (Elastic Container Service) Task. Orchestration and setup of the container service could take up to 1-2 days. While it is possible to deploy this workload in an EKS (Elastic Kubernetes Service) Cluster or a standalone EC2 instance, this document will focus on a typical deployment in AWS ECS.
+The MTE Relay Server is typically used to decode HTTP Requests from a browser-based web application (or mobile WebView) and proxy the decoded request to the intended API. In AWS, the MTE Relay Server container can be orchestrated as a single or multi-container in an ECS (Elastic Container Service) Task. Orchestration and setup of the container service could take up to 1-2 days. While it is possible to deploy this workload in an EKS (Elastic Kubernetes Service) Cluster, this document will focus on a typical deployment in AWS ECS.
 
 ### Typical Customer Deployment
 
@@ -69,6 +69,8 @@ In an ideal situation, a customer will already have (or plan to create):
 
 - A [web application](#client-side-implementation) with a JavaScript front-end or a mobile application using WebView.
 - A RESTful Web API back-end.
+
+![Typical Use Case](/guides/aws/diagrams/mte-relay-use-case.png)
 
 ### When completed, the following services and resources will be set up:
 
@@ -136,24 +138,110 @@ _The customer is required to create the following keys. It is recommended that t
 
 The MTE Relay is configurable using the following **environment variables** :
 
-- UPSTREAM
+### Required Configuration Variables:
+- `UPSTREAM`
   - **Required**
   - The upstream application IP address, ingress, or URL that inbound requests will be proxied to.
-- CORS\_ORIGINS
+- `CORS_ORIGINS`
   - **Required**
   - A comma-separated list of URLs that will be allowed to make cross-origin requests to the server.
-- SERVER\_ID
-  - A GUID or otherwise unique string; 32+ character is recommended. Use this when load balancing multiple instances of MTE Relay Server so they all have the same server ID.
-- CLIENT\_ID\_SECRET
+- `CLIENT_ID_SECRET`
   - **Required**
   - A secret that will be used to sign the x-mte-client-id header. A 32+ character string is recommended.
-- REDIS\_URL
+  - Note: This will allow you to personalize your client/server relationship.
+- `REDIS_URL`
   - **Required**
   - The entry point to your Redis ElastiCache cluster.
 
-### Other configuration variables:
+### Optional Configuration Variables:
 
-Please see [MTE Relay Server Docs](https://github.com/Eclypses/mte-relay-server/blob/master/README.md#configuration-options) for more info.
+_The following configuration variables have default values. If the customer does choose to create the following keys, it is recommended that these keys be stored in AWS Secrets Manager._
+
+- `PORT`
+  - The port that the server will listen on.
+  - Default: `8080`.
+  - Note: If this value is changed, make sure it is also changed in your application load balancer.
+- `DEBUG`
+  - A flag that enables debug logging.
+  - Default: `false`
+- `PASSTHROUGH_ROUTES`
+  - A list of routes that will be passed through to the upstream application without being MTE encoded/decoded.
+  - example: "/some_route_that_is_not_secret"
+- `MTE_ROUTES`
+  - A list of routes that will be MTE encoded/decoded. If this optional property is included, only the routes listed will be MTE encoded/decoded, and any routes not listed here or in `PASS_THROUGH_ROUTES` will 404. If this optional property is not included, all routes not listed in `PASSTHROUGH_ROUTES` will be MTE encoded/decoded.
+- `CORS_METHODS`
+  - A list of HTTP methods that will be allowed to make cross-origin requests to the server.
+  - Default: `GET, POST, PUT, DELETE`.
+  - Note: `OPTIONS` and `HEAD` are always allowed.
+- `HEADERS`
+  - An object of headers that will be added to all request/responses.
+- `MAX_POOL_SIZE`
+  - The number of encoder objects and decoder objects held in a pool. A larger pool will consume more memory, but it will also handle more traffic more quickly. This number is applied to all four pools; the MTE Encoder, MTE Decoder, MKE Encoder, and MKE Decoder pools.
+  - Default: `25`
+### YAML Configuration Examples
+[AWS Task Definition Parameters](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/taskdef-envfiles.html)
+#### Minimal Configuration Example
+```yaml
+upstream: https://api.my-company.com
+clientIdSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
+corsOrigins:
+  - https://www.my-company.com
+  - https://dashboard.my-company.com
+redisURL: redis://10.0.1.230:6379
+```
+
+#### Full Configuration Example
+
+```yaml
+upstream: https://api.my-company.com
+clientIdSecret: 2DkV4DDabehO8cifDktdF9elKJL0CKrk
+corsOrigins:
+  - https://www.my-company.com
+  - https://dashboard.my-company.com
+redisURL: redis://10.0.1.230:6379
+port: 3000
+debug: true
+passThroughRoutes:
+  - /health
+  - /version
+mteRoutes:
+  - /api/v1/*
+  - /api/v2/*
+corsMethods:
+  - GET
+  - POST
+  - DELETE
+headers:
+  x-service-name: mte-relay
+maxPoolSize: 10
+```
+
+### ENV Configuration Examples
+- [AWS Task Definition Environment File](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/use-environment-file.html)
+- [AWS Retrieve Secrets Manager Secrets](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/secrets-envvar-secrets-manager.html)
+#### Minimal Configuration Example
+```env
+UPSTREAM='https://api.my-company.com'
+CLIENT_ID_SECRET='2DkV4DDabehO8cifDktdF9elKJL0CKrk'
+CORS_ORIGINS='https://www.my-company.com,https://dashboard.my-company.com'
+REDIS_URL='redis://10.0.1.230:6379'
+```
+
+#### Full Configuration Example
+
+```env
+UPSTREAM='https://api.my-company.com'
+CLIENT_ID_SECRET='2DkV4DDabehO8cifDktdF9elKJL0CKrk'
+CORS_ORIGINS='https://www.my-company.com,https://dashboard.my-company.com'
+REDIS_URL='redis://10.0.1.230:6379'
+PORT=3000
+DEBUG=true
+PASSTHROUGH_ROUTES='/health,/version'
+MTE_ROUTES='/api/v1/*,/api/v2/*'
+CORS_METHODS='GET,POST,DELETE'
+HEADERS='{"x-service-name":"mte-relay"}'
+MAX_POOL_SIZE=10
+```
 
 ### Database Credentials:
 
@@ -166,9 +254,6 @@ It is not necessary to rotate any keys in the Environment Variables section as t
 # Architecture Diagrams
 
 ## Default Deployment - ECS Deployment ![ECS Deployment](/guides/aws/diagrams/aws_ecs_diagram.png)
-
-## Alternative Deployment - EC2 Deployment – Single Container ![EC2 Deployment – Single Container](/guides/aws/diagrams/aws_ec2_diagram.png)
-_\*This process is not described in this document_
 
 ## Alternative Deployment - EKS Deployment – Multiple Load- Balanced Containers ![EKS Deployment – Multiple Load- Balanced Containers](/guides//aws/diagrams/aws_eks_diagram.png)
 
@@ -289,13 +374,8 @@ ECS will run the MTE Relay container and dynamically scale it when required. To 
     - It is an essential container
 7. Port Mappings
     - Container runs on port 8080 for HTTP traffic
-8. Provide required Environment Variables
-    - UPSTREAM - The upstream server to proxy decoded requests to. This should be in the same VPC.
-    - CORS\_ORIGINS - A comma-separated list of CORs origins that can make requests to this Relay Server.
-    - SERVER\_ID - A GUID or otherwise unique string; 32+ character is recommended.
-    - CLIENT\_ID\_SECRET - A secret string used for signing cookies; a 32+ character string is recommended.
-    - REDIS\_URL - The entry point to your Redis ElastiCache cluster.
-    - Additional environment variables can be set. Please see [MTE Relay Server Docs](https://github.com/Eclypses/mte-relay-server) for more info.
+8. Provide [Required Environment Variables](#required-configuration-variables)
+    - Additional environment variables can be set. Please see [MTE Relay Server Docs](#optional-configuration-variables) for more info.
 9. Select to export logs to AWS Cloud Watch
     - Create a new CloudWatch log group, and select the same region your MTE Relay Server is running in.
     - Subject to CloudWatch [limits](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch_limits.html)
@@ -439,7 +519,7 @@ Some specific error examples include:
   - This is a config validation error. Look at the "path" property to determine which of the required Environment Variables you did not set. For example, if the path property shows "upstream," then you forgot to set the environment variable "UPSTREAM."
 - Server cannot reach ElastiCache.
   - Check that ElastiCache is started in same VPC.
-  - Check that ElastiCache security group allows traffic from MTE Relay EC2 instance.
+  - Check that ElastiCache security group allows traffic from MTE Relay ECS instance.
   - If using credentials, check that credentials are correct.
 
 MTE Relay Server includes a Debug flag, which you can enable by setting the environment variable "DEBUG" to true. This will enable additional logging that you can review in CloudWatch to determine the source of any issues.
