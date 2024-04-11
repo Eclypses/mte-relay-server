@@ -148,10 +148,10 @@ The MTE Relay is configurable using the following **environment variables** :
 - `CLIENT_ID_SECRET`
   - **Required**
   - A secret that will be used to sign the x-mte-client-id header. A 32+ character string is recommended.
-  - Note: This will allow you to personalize your client/server relationship.
+  - Note: This will allow you to personalize your client/server relationship. It is required to validate the sender.
 - `REDIS_URL`
-  - **Required**
-  - The entry point to your Redis ElastiCache cluster.
+  - **Strongly Recommended in Production Environments**
+  - The entry point to your Redis ElastiCache cluster. If null, the container will use internal memory. In load-balanced workflows, a common cache location is essential to maintain a paired relationship with the upstream API Relay.
 
 ### Optional Configuration Variables:
 
