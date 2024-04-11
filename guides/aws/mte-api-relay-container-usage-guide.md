@@ -1,6 +1,6 @@
 # Introduction:
 
-The MTE Relay Server is a NodeJS application that decodes and proxies HTTP payloads from client applications encoded by Eclypses MTE Software. The Eclypses MTE is a compiled software library combining quantum-resistant algorithms with proprietary, patented techniques to encode data. A common use case for the MTE is to import Eclypses' client-side NPM package into a web application to encode data-in-transit and the MTE Relay Server to pair, decode, and proxy the request to the intended recipient. The MTE Relay has been used in payment gateways to secure the creation of payments, as a VPN replacement for analytics dashboards, and orchestrated in highly-available enterprise environments.
+The MTE API Relay Container is a NodeJS application that encodes and proxies HTTP payloads to another MTE API Relay Container, which decodes and proxies the request to another API Service. The Eclypses MTE is a compiled software library combining quantum-resistant algorithms with proprietary, patented techniques to encode data. A common use case for the MTE API Relay is to add an MTE translation layer of security to HTTP Requests being made across the open internet (Example: A server-side application calls a third-party API service).
 
 # Table of Contents
 - [Customer Deployment](#customer-deployment)
@@ -9,7 +9,6 @@ The MTE Relay Server is a NodeJS application that decodes and proxies HTTP paylo
    * [Deployment Options](#deployment-options)
       + [Supported Regions](#supported-regions)
    * [Port Mappings](#port-mappings)
-   * [Client-Side Implementation](#client-side-implementation)
 - [Prerequisites and Requirements](#prerequisites-and-requirements)
    * [Technical](#technical)
    * [Skills or Specialized Knowledge](#skills-or-specialized-knowledge)
@@ -45,7 +44,6 @@ The MTE Relay Server is a NodeJS application that decodes and proxies HTTP paylo
       + [Environment](#environment)
       + [Deployment Configuration](#deployment-configuration)
          - [Networking](#networking)
-   * [MTE Relay Client-Side Setup](#mte-relay-client-side-setup)
 - [Testing](#testing)
    * [Troubleshooting](#troubleshooting)
 - [Health Check](#health-check)
@@ -61,16 +59,21 @@ The MTE Relay Server is a NodeJS application that decodes and proxies HTTP paylo
 
 # Customer Deployment
 
-The MTE Relay Server is typically used to decode HTTP Requests from a browser-based web application (or mobile WebView) and proxy the decoded request to the intended API. In AWS, the MTE Relay Server container can be orchestrated as a single or multi-container in an ECS (Elastic Container Service) Task. Orchestration and setup of the container service could take up to 1-2 days. While it is possible to deploy this workload in an EKS (Elastic Kubernetes Service) Cluster, this document will focus on a typical deployment in AWS ECS.
+The MTE API Relay Container is typically used to encode HTTP Requests from a server-side application, proxy the request to another MTE API Relay Container who decodes the request, and proxies the request to the intended API. In AWS, the MTE API Relay Container can be orchestrated as a single or multi-container in an ECS (Elastic Container Service) Task. Orchestration and setup of the container service could take a few hours. While it is possible to deploy this workload in an EKS (Elastic Kubernetes Service) Cluster, this document will focus on a typical deployment in AWS ECS.
 
 ### Typical Customer Deployment
 
 In an ideal situation, a customer will already have (or plan to create):
 
-- A [web application](#client-side-implementation) with a JavaScript front-end or a mobile application using WebView.
-- A RESTful Web API back-end.
+- An application that sends HTTP Requests to another RESTful API Service.
+- A second RESTful API Service. This could be in another region, AWS Account, or third-party environment (assuming the third-party has the ability to stand-up an MTE API Relay Container of their own).
 
-![Typical Use Case](/guides/aws/diagrams/mte-relay-use-case.png)
+Typical Use Case: 
+- To encode/decode HTTP Requests between services, an API Relay Container must exist on each side of the transmission.
+- At least one API Relay Container will run in the sending environment.
+- At least one API Relay Container will run in the receiving environment.
+
+![Typical Use Case](/guides/aws/diagrams/mte-api-relay-use-case.png)
 
 ### When completed, the following services and resources will be set up:
 
@@ -80,20 +83,20 @@ In an ideal situation, a customer will already have (or plan to create):
 | AWS ElastiCache | True | MTE State Management |
 | AWS CloudWatch | True | Logging |
 | AWS VPC | True | Virtual Private Cloud |
-| Elastic Load Balancer | True | Required if orchestrating multiple containers |
+| Elastic Load Balancer | False | Required if orchestrating multiple containers and/or acting as a receiver of encoded data |
 | AWS Secrets Manager | False | Recommended for Environment Variables |
 
 | **Resource** | **Required** | **Purpose** |
 | --- | --- | --- |
-| _Eclypses MTE Relay Server_ container(s) | True | Purchased from the AWS Marketplace |
+| _Eclypses MTE API Relay_ container(s) | True | Purchased from the AWS Marketplace |
 | ElastiCache for Redis | True | ElastiCache |
-| Application Load Balancer | True | Recommended - even for a single container workflow |
+| Application Load Balancer | False | Recommended - even for a single container workflow |
 | ECS Task | True | Orchestration |
 
 ## Deployment Options:
 
 1. The default deployment: Multiple AZ, Single Region
-2. For Multi-AZ or Multi-Region deployments, the MTE Relay Container is a stateful service and will create unique, one-to-one MTE States with individual client-side browser application sessions. As such, it is important to understand that to deploy multi-region configurations, a single ElastiCache service must be accessible to all regions that might be processing HTTP requests from a single client session.
+2. For Multi-AZ or Multi-Region deployments, the MTE API Relay Container is a stateful service and will create unique, one-to-one MTE States with individual application sessions. As such, it is important to understand that to deploy multi-region configurations, a single ElastiCache service must be accessible to all regions that might be processing HTTP requests from a single application proxy session.
 
 ### Supported Regions:
 
@@ -108,14 +111,6 @@ Not currently supported in:
 
 1. Container runs on port 8080 for HTTP traffic
 
-## Client-Side Implementation:
-
-MTE Relay Server is intended for use with your web application configured to use MTE Relay Client. As a result, a client can pair with the server and send MTE-encoded payloads. Without a compatible client-side application, this product has extremely limited utility. The MTE Relay server provides access to the client JavaScript module required to secure/unsecure data on the client. Once the server is set up, the client JS code is available at the route /public/mte-relay-client.js.
-
-Reference the [setup and usage instructions](#mte-relay-client-side-setup) here.
-
-Client-Side implementation is typically less than one day of work but may take longer in more complex DevOps pipelines.
-
 # Prerequisites and Requirements
 
 ## Technical
@@ -124,19 +119,16 @@ The following elements are previously required for a successful deployment:
 
 1. An application (or planned application) that communicates with a Web API using HTTP Requests
 
-    - Ideally, this is an application the purchaser owns or can import packages and add/change custom code.
-
 ## Skills or Specialized Knowledge
 
 - Familiarity with AWS ECS (or EKS orchestration)
 - General familiarity with AWS Services like ElastiCache
-- Ability to write/edit front-end client application code. JavaScript knowledge is ideal.
 
 ## Configuration
 
 _The customer is required to create the following keys. It is recommended that these keys be stored in AWS Secrets Manager._
 
-The MTE Relay is configurable using the following **environment variables** :
+The MTE API Relay is configurable using the following **environment variables** :
 
 ### Required Configuration Variables:
 - `UPSTREAM`
@@ -177,7 +169,10 @@ _The following configuration variables have default values. If the customer does
   - An object of headers that will be added to all request/responses.
 - `MAX_POOL_SIZE`
   - The number of encoder objects and decoder objects held in a pool. A larger pool will consume more memory, but it will also handle more traffic more quickly. This number is applied to all four pools; the MTE Encoder, MTE Decoder, MKE Encoder, and MKE Decoder pools.
-  - Default: `25`
+  - Default: `25`  
+- `OUTBOUND_TOKEN`
+  - The value appended to the x-mte-outbound-token header to denote the intended outbound recipient.
+
 ### YAML Configuration Examples
 [AWS Task Definition Parameters](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/taskdef-envfiles.html)
 #### Minimal Configuration Example
@@ -214,6 +209,7 @@ corsMethods:
 headers:
   x-service-name: mte-relay
 maxPoolSize: 10
+outboundToken: abcdefg1234567
 ```
 
 ### ENV Configuration Examples
@@ -241,6 +237,7 @@ MTE_ROUTES='/api/v1/*,/api/v2/*'
 CORS_METHODS='GET,POST,DELETE'
 HEADERS='{"x-service-name":"mte-relay"}'
 MAX_POOL_SIZE=10
+OUTBOUND_TOKEN='abcdefg1234567`
 ```
 
 ### Database Credentials:
@@ -253,15 +250,15 @@ It is not necessary to rotate any keys in the Environment Variables section as t
 
 # Architecture Diagrams
 
-## Default Deployment - ECS Deployment ![ECS Deployment](/guides/aws/diagrams/aws_ecs_diagram.png)
+## Default Deployment - ECS Deployment ![ECS Deployment](/guides/aws/diagrams/aws_ecs_s2s_diagram.png)
 
-## Alternative Deployment - EKS Deployment – Multiple Load- Balanced Containers ![EKS Deployment – Multiple Load- Balanced Containers](/guides//aws/diagrams/aws_eks_diagram.png)
+## Alternative Deployment - EKS Deployment – Multiple Load- Balanced Containers ![EKS Deployment – Multiple Load- Balanced Containers](/guides//aws/diagrams/aws_eks_s2s_diagram.png)
 
 _\*This process is not described in this document_
 
 # Security
 
-The MTE Relay does not require AWS account root privilege for deployment or operation. The container only facilitates the data as it moves from client to server and does not store any sensitive data.
+The MTE API Relay does not require AWS account root privilege for deployment or operation. The container only facilitates the data as it moves from client to server and does not store any sensitive data.
 
 ## AWS Identity and Access Management (IAM) Roles:
 
@@ -280,11 +277,11 @@ Give your task definition appropriate roles:
 
 ### VPC (Virtual Private Cloud)
 
-While traffic is protected between the client application and MTE Relay Server, the traffic is not encoded while it is proxied to the upstream service. The MTE Relay container should be deployed in the same VPC as the upstream servers so that proxied traffic can remain internal only. See the architecture diagrams for a visual representation.
+While traffic is protected between the client application and MTE API Relay Server, the traffic is not encoded while it is proxied to the upstream service. The MTE API Relay Container should be deployed in the same VPC as the upstream servers so that proxied traffic can remain internal only. See the architecture diagrams for a visual representation.
 
 # Costs
 
-The MTE Relay container is a usage-based model based on Cost/Unit/Hr, where a unit = AWS ECS Task. See the marketplace listing for costs.
+The MTE API Relay Container is a usage-based model based on Cost/Unit/Hr, where a unit = AWS ECS Task. See the marketplace listing for costs.
 
 ### Billable Services
 
@@ -294,22 +291,22 @@ The MTE Relay container is a usage-based model based on Cost/Unit/Hr, where a un
 | AWS ElastiCache | True | MTE State Management |
 | AWS CloudWatch | True | Logging |
 | AWS VPC | True | Recommended |
-| Elastic Load Balancer | True | Required if orchestrating multiple containers |
+| Elastic Load Balancer | False | Required if orchestrating multiple containers and/or acting as a receiver of encoded data |
 | AWS Secrets Manager | False | Recommended for Environment Variables |
 
 # Sizing
 
 ## ECS
 
-The Relay Server can be load-balanced as needed and configured for autoscaling. There are no size requirements.
+The API Relay can be load-balanced as needed and configured for autoscaling. There are no size requirements.
 
-- The MTE Relay Server Container workload is subject to [ECS Service Limits.](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-quotas.html)
+- The MTE API Relay Container workload is subject to [ECS Service Limits.](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-quotas.html)
 
 # Deployment Assets
 
 ## VPC Setup
 
-It is not necessary to create a dedicated VPC for this workflow. Ideally, your MTE Relay Server is run in the same VPC as your upstream API.
+It is not necessary to create a dedicated VPC for this workflow. Ideally, your MTE API Relay Server is run in the same VPC as your upstream API.
 
 ## AWS ElastiCache Redis Setup
 
@@ -318,12 +315,12 @@ It is not necessary to create a dedicated VPC for this workflow. Ideally, your M
 - Create a new security group.
 - Give your security group a name and description.
   -  `MTERelayElastiCacheSG`
-  - Allow traffic from MTE Relay ECS service.
+  - Allow traffic from MTE API Relay ECS service.
 - Add a new inbound rule.
   - Type: All TCP
   - Source: Custom
     - Click in the search box, and scroll down to select your security group `MteRelayServiceSG`.
-  - Description: Allow traffic from MTE Relay ECS Service.
+  - Description: Allow traffic from MTE API Relay ECS Service.
 - If an outbound rule does not already exist to allow all outbound traffic, create one.
   - Type: All Traffic
   - Destination: Anywhere IPv4
@@ -335,7 +332,7 @@ It is not necessary to create a dedicated VPC for this workflow. Ideally, your M
 2. Select Redis Interface
     -  Subject to quota [limits](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/quota-limits.html)
     -  The minimum/maximum defaults should be sufficient
-3. Assign your [Security Group](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/GettingStarted.AuthorizeAccess.html) that allows traffic on port `6379` and `6380` from your MTE Relay Server ECS instance.
+3. Assign your [Security Group](https://docs.aws.amazon.com/AmazonElastiCache/latest/red-ug/GettingStarted.AuthorizeAccess.html) that allows traffic on port `6379` and `6380` from your MTE API Relay Server ECS instance.
     - Select your newly created cache, then click **Modify** from the top right.
     - Scroll down to Security, then under Security Groups click **Manage**
     - Remove the default security group and add the security group `MTERelayElastiCacheSG`
@@ -343,7 +340,7 @@ It is not necessary to create a dedicated VPC for this workflow. Ideally, your M
 4. Configure ElastiCache for Redis to the private subnet
 
 ## Setting up Elastic Container Service (ECS)
-ECS will run the MTE Relay container and dynamically scale it when required. To do this, create a task definition to define what a single MTE Relay container looks like, create a Service to manage running the containers, and finally create an ECS Cluster for your service to run in.
+ECS will run the MTE API Relay Container and dynamically scale it when required. To do this, create a task definition to define what a single MTE API Relay Container looks like, create a Service to manage running the containers, and finally create an ECS Cluster for your service to run in.
 
 ### Create an ECS Cluster
 1. Navigate to ECS, then click "Clusters" from the left side menu.
@@ -364,33 +361,33 @@ ECS will run the MTE Relay container and dynamically scale it when required. To 
 
 ### Task Definition Directions
 1. Subscribe to the Container Product from the marketplace
-2. Create new Task Definition called MTE Relay Server
+2. Create new Task Definition called MTE API Relay Server
 3. Choose ECS Instance launch type; AWS Fargate
 4. Choose CPU and Memory. There is no minimum requirement, but `1 CPU` and `2GB memory` is recommended.
 5. Give your task definition appropriate roles:
     - `ecsTaskExecutionRole`
     - Note: The task must have access to the `AWSMarketplaceMeteringRegisterUsage` role.
-6. Provide the MTE Relay Docker image URI and give your container a name.
+6. Provide the MTE API Relay Docker image URI and give your container a name.
     - It is an essential container
 7. Port Mappings
     - Container runs on port 8080 for HTTP traffic
 8. Provide [Required Environment Variables](#required-configuration-variables)
-    - Additional environment variables can be set. Please see [MTE Relay Server Docs](#optional-configuration-variables) for more info.
+    - Additional environment variables can be set. Please see [Optional Configuration Variables](#optional-configuration-variables) for more info.
 9. Select to export logs to AWS Cloud Watch
-    - Create a new CloudWatch log group, and select the same region your MTE Relay Server is running in.
+    - Create a new CloudWatch log group, and select the same region your MTE API Relay Server is running in.
     - Subject to CloudWatch [limits](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch_limits.html)
 10. Save Task Definition
 
 ## ECS Service Setup
 
-After creating the MTE Relay Task Definition, you can create a new ECS service that utilizes that task definition.
+After creating the MTE API Relay Task Definition, you can create a new ECS service that utilizes that task definition.
 
-1. Select the MTE Relay Task Definition and click Deploy \> Create Service
+1. Select the MTE API Relay Task Definition and click Deploy \> Create Service
 2. Leave "Compute Configuration" defaults.
-3. Under Deployment Configuration, name your service MTE Relay Service
-4. For the number of desired tasks, select how many instances of MTE Relay you would like.
+3. Under Deployment Configuration, name your service MTE API Relay Service
+4. For the number of desired tasks, select how many instances of MTE API Relay you would like.
   -  Minimum is 1, and recommended is 2 or more.
-5. Under the networking sections, ensure you are launching MTE Relay in the same VPC as your upstream service.
+5. Under the networking sections, ensure you are launching MTE API Relay in the same VPC as your upstream service.
 6. Select, or create a new, [service group](#ECS-Cluster-Security-Group) that will allow traffic from your load balancer. 
 7. Create a new [load balancer](#Load-Balancer-Settings) for this service.
 8. Set any additional configuration regarding service scaling or tags. These are optional.
@@ -401,7 +398,7 @@ After creating the MTE Relay Task Definition, you can create a new ECS service t
 - Create a new security group.
 - Give your security group a name and description
   - `MteRelayServiceSG`
-  - Allow Traffic to MTE Relay Service
+  - Allow Traffic to MTE API Relay Service
 - Add a new inbound rule.
   - Type: All TCP
   - Source: Custom
@@ -449,7 +446,7 @@ All default options are fine.
 - Use the Family dropdown to select the Family Name you create in your task definition.
 - Select the latest revision of that task definition
 - Name your service
-- Desired tasks: 1 is ok to test. If you have more traffic, you may choose to run 2 or more instances of MTE Relay Server.
+- Desired tasks: 1 is ok to test. If you have more traffic, you may choose to run 2 or more instances of MTE API Relay Server.
 
 #### Networking
 
@@ -457,31 +454,9 @@ All default options are fine.
 - Choose your subnets. Select all if you're not sure.
 - Under security groups, remove any default groups, and add the security group **MteRelayServiceSG**
 
-## MTE Relay Client-Side Setup
-
-The MTE Relay server provides access to the client JavaScript module required to encode/decode data on the client. Once the server is set up, the client JS code is available at the route `/public/mte-relay-client.js`.
-<br/>_\*The MTE Relay Client is not a container. This is a JavaScript Package that you must embed in your own client-side application._
-
-1. Navigate to your load balancer, and append the path `/public/mte-relay-client.js`
-2. Include using a `<script src=".../public/mte-relay-client.js"></script>`
-3. Include by copy/pasting into the source code of your web application.
-4. Use `mteFetch()` to send encrypted data. This is analogous to (and likely should replace instances of) the JavaScript [Fetch API](https://www.w3schools.com/jsref/api_fetch.asp).
-
-```js
-// use mteFetch to handle pairing, encoding data, and sending/receiving it
-const response = await mteFetch(
-  "https://[your_relay_url]/api/[your_api_route]",
-  {
-    method: "POST",
-    body: JSON.stringify({ data }),
-  }
-);
-const data = await response.json();
-```
-
 # Testing
 
-Once the Relay Server is configured:
+Once the API Relay Server is configured:
 
 - Monitor logs in CloudWatch – check for initialization errors.
   - On successful startup, you should see two logs
@@ -490,19 +465,24 @@ Once the Relay Server is configured:
 - To test that the API Service is active and running, submit an HTTPGet request to the echo route:
   - curl 'https://[your\_domain]/api/mte-echo/test' 
   - Successful response: {"echo":"test","time"[UTC datetime]}
-- Add "relay-test.eclypses.com" to "CORS" comma-separated environment variable
-- Navigate to the Eclypses testing application at:
-[https://relay-test.eclypses.com](https://relay-test.eclypses.com/)
-- Input your Relay URL in the "Relay Server URL" textbox
-- Test the "Login" demo (note: this is a simple HTTPPost submission - not a real login!)
-  - Success Scenario ![Success Scenario](/guides/aws/diagrams/mte-relay-file-upload-success.png)
-  - Failure Scenario ![Failure Scenario](/guides/aws/diagrams/relay-login-failed.png)
-- Test the File Upload
-  - Success Scenario
- ![Success Scenario](/guides/aws/diagrams/mte-relay-file-upload-success.png)
-  - Error Scenario
- ![Error Scenario](/guides/aws/diagrams/mte-relay-file-upload-failed.png)
 
+Once both sides of the transmission have at least one API Relay Container:
+- Import The [Postman Collection](/guides/aws/postman/MTE-Relay-Server-to-Server.postman_collection.json) following these [directions](https://apidog.com/blog/how-to-import-export-postman-collection-data/#:~:text=Open%20Postman%20and%20click%20on,Collections%22%20on%20the%20left%20sidebar.) 
+- Once imported, click the ellipses (...) next to the created collection and select "Edit".
+- Navigate to the "Variables" tab.
+- Change the "Current value" of the "DOMAIN" variable to the URL for API Relay #1.
+- Change the "Current value" of the "UPSTREAM" variable to the URL for API Relay #2.
+![Example Configuration](/guides/aws/postman/postman-s2s-variables.png)
+- Test the /Echo and /MTE-Relay Routes for general tests.
+  - Success Criteria
+  ![Success Criteria](/guides/aws/diagrams/api-relay-echo-test-success.png)
+  - Failure Criteria
+  ![Failure Criteria](/guides/aws/diagrams/api-relay-echo-test-failure.png)
+- Test the HTTP Requests in the Demo Directory for full continuity. 
+  - Success Criteria
+  ![Success Criteria](/guides/aws/diagrams/api-relay-patients-test-success.png)
+  - Failure Criteria
+  ![Failure Criteria](/guides/aws/diagrams/api-relay-patients-test-failure.png)
 ## Troubleshooting
 
 Most problems can be determined by consulting the logs in AWS CloudWatch. Some common problems that might occur are:
@@ -512,17 +492,17 @@ Most problems can be determined by consulting the logs in AWS CloudWatch. Some c
 
 Some specific error examples include:
 
-- I cannot reach my relay server.
+- I cannot reach my API Relay Container.
   - Double check your Security Group allows traffic from your load balancer.
   - Check CloudWatch
 - Server exits with a `ZodError`
   - This is a config validation error. Look at the "path" property to determine which of the required Environment Variables you did not set. For example, if the path property shows "upstream," then you forgot to set the environment variable "UPSTREAM."
 - Server cannot reach ElastiCache.
   - Check that ElastiCache is started in same VPC.
-  - Check that ElastiCache security group allows traffic from MTE Relay ECS instance.
+  - Check that ElastiCache security group allows traffic from MTE API Relay ECS instance.
   - If using credentials, check that credentials are correct.
 
-MTE Relay Server includes a Debug flag, which you can enable by setting the environment variable "DEBUG" to true. This will enable additional logging that you can review in CloudWatch to determine the source of any issues.
+MTE API Relay Server includes a Debug flag, which you can enable by setting the environment variable "DEBUG" to true. This will enable additional logging that you can review in CloudWatch to determine the source of any issues.
 
 # Health Check
 
@@ -545,12 +525,12 @@ Updated images are distributed through the marketplace.
 ### Service Limits
 
 - ECS
-  - The MTE Relay Server Container workload is subject to [ECS Service Limits.](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-quotas.html)
+  - The MTE API Relay Container workload is subject to [ECS Service Limits.](https://docs.aws.amazon.com/AmazonECS/latest/developerguide/service-quotas.html)
 - ElastiCache
 - CloudWatch
   - [Setting up alerts](https://docs.aws.amazon.com/AmazonCloudWatch/latest/monitoring/cloudwatch_limits.html)
 - ELB (Elastic Load Balancer)
-  - The MTE Relay Server Container workload is subject to [ELB Service Limits:](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-limits.html)
+  - The MTE API Relay Container workload is subject to [ELB Service Limits:](https://docs.aws.amazon.com/elasticloadbalancing/latest/application/load-balancer-limits.html)
 
 ### Rotation of Secrets
 
@@ -569,7 +549,7 @@ Tips for solving error states:
 
 ## How to recover the software
 
-The MTE Relay Container ECS task can be relaunched. While current client sessions may be affected, the client-side package should seamlessly manage the re-pairing process with the MTE Relay Server and the end-user should not be affected.
+The MTE API Relay Container ECS task can be relaunched. While current sessions may be affected, the container will seamlessly manage the re-pairing process with the MTE API Relay Upstream Server and the end-user should not be affected.
 
 # Support
 

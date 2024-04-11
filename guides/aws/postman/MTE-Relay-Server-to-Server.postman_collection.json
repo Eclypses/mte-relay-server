@@ -1,0 +1,369 @@
+{
+	"info": {
+		"_postman_id": "2af1e905-5285-4968-88ca-b5790a6fc7c4",
+		"name": "MTE Relay Server-to-Server",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "1087455"
+	},
+	"item": [
+		{
+			"name": "Demo",
+			"item": [
+				{
+					"name": "Patients",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-mte-outbound-token",
+								"value": "{{TOKEN}}",
+								"type": "text",
+								"description": "Required"
+							},
+							{
+								"key": "x-mte-upstream",
+								"value": "{{UPSTREAM}}",
+								"type": "text",
+								"description": "Required"
+							},
+							{
+								"key": "x-mte-encode-type",
+								"value": "MTE",
+								"description": "MTE or MKE - default is MKE",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-headers",
+								"value": "false",
+								"description": "true, false, or coma,separated,list of headers to encode - default is true",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-url",
+								"value": "false",
+								"description": "true, false - default is true",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{DOMAIN}}/api/patients",
+							"host": [
+								"{{DOMAIN}}"
+							],
+							"path": [
+								"api",
+								"patients"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Login",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "x-mte-outbound-token",
+								"value": "{{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "x-mte-upstream",
+								"value": "{{UPSTREAM}}",
+								"type": "text"
+							},
+							{
+								"key": "x-mte-encode-type",
+								"value": "MTE",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-headers",
+								"value": "false",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-url",
+								"value": "false",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"email\": \"jim.halpert@example.com\",\r\n    \"password\": \"P@ssw0rd!\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{DOMAIN}}/api/login",
+							"host": [
+								"{{DOMAIN}}"
+							],
+							"path": [
+								"api",
+								"login"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Credit Card",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "x-mte-outbound-token",
+								"value": "{{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "x-mte-upstream",
+								"value": "{{UPSTREAM}}",
+								"type": "text"
+							},
+							{
+								"key": "x-mte-encode-type",
+								"value": "MTE",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-headers",
+								"value": "false",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-url",
+								"value": "false",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"fullName\": \"Trevor Halpert\",\r\n    \"creditCardNumber\": \"1234 5678 9012 3456\",\r\n    \"expiration\": \"12/24\",\r\n    \"cvc\": \"123\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{DOMAIN}}/api/credit-card",
+							"host": [
+								"{{DOMAIN}}"
+							],
+							"path": [
+								"api",
+								"credit-card"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "File Upload",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "x-mte-outbound-token",
+								"value": "{{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "x-mte-upstream",
+								"value": "{{UPSTREAM}}",
+								"type": "text"
+							},
+							{
+								"key": "x-mte-encode-type",
+								"value": "MTE",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-headers",
+								"value": "false",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-url",
+								"value": "false",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/C:/Users/Trevor/Pictures/Random Images for Dev/traffic-lights.jpg"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{DOMAIN}}/api/upload-file",
+							"host": [
+								"{{DOMAIN}}"
+							],
+							"path": [
+								"api",
+								"upload-file"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Custom Headers",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "x-mte-outbound-token",
+								"value": "{{TOKEN}}",
+								"type": "text"
+							},
+							{
+								"key": "x-mte-upstream",
+								"value": "{{UPSTREAM}}",
+								"type": "text"
+							},
+							{
+								"key": "x-auth-token",
+								"value": "aHR0cHM6Ly93d3cueW91dHViZS5jb20vd2F0Y2g/dj1kUXc0dzlXZ1hjUQ==",
+								"type": "text"
+							},
+							{
+								"key": "x-mte-encode-type",
+								"value": "MTE",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-headers",
+								"value": "false",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "x-mte-encode-url",
+								"value": "false",
+								"type": "text",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "{{DOMAIN}}/api/custom-headers?header=x-auth-token",
+							"host": [
+								"{{DOMAIN}}"
+							],
+							"path": [
+								"api",
+								"custom-headers"
+							],
+							"query": [
+								{
+									"key": "header",
+									"value": "x-auth-token"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Echo",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{DOMAIN}}/api/mte-echo",
+					"host": [
+						"{{DOMAIN}}"
+					],
+					"path": [
+						"api",
+						"mte-echo"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "MTE-Relay",
+			"request": {
+				"method": "HEAD",
+				"header": [],
+				"url": {
+					"raw": "{{DOMAIN}}/api/mte-relay",
+					"host": [
+						"{{DOMAIN}}"
+					],
+					"path": [
+						"api",
+						"mte-relay"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "DOMAIN",
+			"value": "http://localhost:8080",
+			"type": "string"
+		},
+		{
+			"key": "UPSTREAM",
+			"value": "http://localhost:8081",
+			"type": "string"
+		},
+		{
+			"key": "TOKEN",
+			"value": "abcdefghijklmnopqrstuvwxyz0123456789812",
+			"type": "string"
+		}
+	]
+}
