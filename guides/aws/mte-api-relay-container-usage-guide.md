@@ -59,7 +59,7 @@ The MTE API Relay Container is a NodeJS application that encodes and proxies HTT
 
 # Customer Deployment
 
-The MTE API Relay Container is typically used to encode HTTP Requests from a server-side application, proxy the request to another MTE API Relay Container who decodes the request, and proxies the request to the intended API. In AWS, the MTE API Relay Container can be orchestrated as a single or multi-container in an ECS (Elastic Container Service) Task. Orchestration and setup of the container service could take up to 1-2 days. While it is possible to deploy this workload in an EKS (Elastic Kubernetes Service) Cluster, this document will focus on a typical deployment in AWS ECS.
+The MTE API Relay Container is typically used to encode HTTP Requests from a server-side application, proxy the request to another MTE API Relay Container who decodes the request, and proxies the request to the intended API. In AWS, the MTE API Relay Container can be orchestrated as a single or multi-container in an ECS (Elastic Container Service) Task. Orchestration and setup of the container service could take a few hours. While it is possible to deploy this workload in an EKS (Elastic Kubernetes Service) Cluster, this document will focus on a typical deployment in AWS ECS.
 
 ### Typical Customer Deployment
 
@@ -70,8 +70,8 @@ In an ideal situation, a customer will already have (or plan to create):
 
 Typical Use Case: 
 - To encode/decode HTTP Requests between services, an API Relay Container must exist on each side of the transmission.
-- At least one API Relay Containers will run in the sending environment.
-- At least one API Relay Containers will run in the receiving environment.
+- At least one API Relay Container will run in the sending environment.
+- At least one API Relay Container will run in the receiving environment.
 
 ![Typical Use Case](/guides/aws/diagrams/mte-api-relay-use-case.png)
 
@@ -140,10 +140,10 @@ The MTE API Relay is configurable using the following **environment variables** 
 - `CLIENT_ID_SECRET`
   - **Required**
   - A secret that will be used to sign the x-mte-client-id header. A 32+ character string is recommended.
-  - Note: This will allow you to personalize your client/server relationship.
+  - Note: This will allow you to personalize your client/server relationship. It is required to validate the sender.
 - `REDIS_URL`
-  - **Required**
-  - The entry point to your Redis ElastiCache cluster.
+  - **Strongly Recommended in Production Environments**
+  - The entry point to your Redis ElastiCache cluster. If null, the container will use internal memory. In load-balanced workflows, a common cache location is essential to maintain a paired relationship with the upstream API Relay.
 
 ### Optional Configuration Variables:
 
@@ -466,8 +466,7 @@ Once the API Relay Server is configured:
   - curl 'https://[your\_domain]/api/mte-echo/test' 
   - Successful response: {"echo":"test","time"[UTC datetime]}
 
-Once both sides of the transmission have at least one API Relay Server:
-TODO: Testing Postman -> Relay 1 -> Relay 2 -> API
+Once both sides of the transmission have at least one API Relay Container:
 - Import The [Postman Collection](/guides/aws/postman/MTE-Relay-Server-to-Server.postman_collection.json) following these [directions](https://apidog.com/blog/how-to-import-export-postman-collection-data/#:~:text=Open%20Postman%20and%20click%20on,Collections%22%20on%20the%20left%20sidebar.) 
 - Once imported, click the ellipses (...) next to the created collection and select "Edit".
 - Navigate to the "Variables" tab.
@@ -475,9 +474,15 @@ TODO: Testing Postman -> Relay 1 -> Relay 2 -> API
 - Change the "Current value" of the "UPSTREAM" variable to the URL for API Relay #2.
 ![Example Configuration](/guides/aws/postman/postman-s2s-variables.png)
 - Test the /Echo and /MTE-Relay Routes for general tests.
+  - Success Criteria
+  ![Success Criteria](/guides/aws/diagrams/api-relay-echo-test-success.png)
+  - Failure Criteria
+  ![Failure Criteria](/guides/aws/diagrams/api-relay-echo-test-failure.png)
 - Test the HTTP Requests in the Demo Directory for full continuity. 
-  - If you receive a 200 Response type with a JSON response object, the tests have completed successfully.
-
+  - Success Criteria
+  ![Success Criteria](/guides/aws/diagrams/api-relay-patients-test-success.png)
+  - Failure Criteria
+  ![Failure Criteria](/guides/aws/diagrams/api-relay-patients-test-failure.png)
 ## Troubleshooting
 
 Most problems can be determined by consulting the logs in AWS CloudWatch. Some common problems that might occur are:
@@ -544,7 +549,7 @@ Tips for solving error states:
 
 ## How to recover the software
 
-The MTE API Relay Container ECS task can be relaunched. While current sessions may be affected, the container should seamlessly manage the re-pairing process with the MTE API Relay Upstream Server and the end-user should not be affected.
+The MTE API Relay Container ECS task can be relaunched. While current sessions may be affected, the container will seamlessly manage the re-pairing process with the MTE API Relay Upstream Server and the end-user should not be affected.
 
 # Support
 
