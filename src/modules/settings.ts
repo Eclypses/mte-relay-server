@@ -27,9 +27,9 @@ const settingsSchema = z.object({
   licenseCompany: z.string(),
   licenseKey: z.string(),
   clientIdSecret: z.string(),
-  corsOrigins: z.array(
-    z.string().url({ message: "corsOrigin must be a valid URL." })
-  ),
+  corsOrigins: z
+    .array(z.string().url({ message: "corsOrigin must be a valid URL." }))
+    .optional(),
   port: z.number().optional(),
   debug: z.boolean().optional(),
   passThroughRoutes: z.array(z.string()).optional(),
@@ -74,7 +74,7 @@ export default async function () {
     UPSTREAM: userSettings.upstream,
     LICENSE_COMPANY: userSettings.licenseCompany,
     LICENSE_KEY: userSettings.licenseKey,
-    CORS_ORIGINS: userSettings.corsOrigins,
+    CORS_ORIGINS: userSettings.corsOrigins || [],
     CLIENT_ID_SECRET: userSettings.clientIdSecret,
     DEBUG: userSettings.debug || DEFAULT_OPTIONS.DEBUG,
     OUTBOUND_TOKEN: userSettings.outboundToken,

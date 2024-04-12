@@ -40,8 +40,7 @@ The configuration file is a YAML file that contains the following properties. Ex
   - **Required**
   - A secret that will be used to sign the x-mte-client-id header. A 32+ character string is recommended.
 - `corsOrigins`
-  - **Required**
-  - A list of URLs that will be allowed to make cross-origin requests to the server.
+  - A list of URLs that will be allowed to make cross-origin requests to the server. Required by browsers to communicate with this server.
 - `port`
   - The port that the server will listen on.
   - Default: `8080`.
