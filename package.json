@@ -1,6 +1,6 @@
 {
   "name": "mte-relay-server",
-  "version": "4.1.2",
+  "version": "4.1.3",
   "description": "",
   "scripts": {
     "start": "node --trace-warnings dist/index.js --log-adapter ../examples/log-adapters/stdout.js",
