@@ -2,9 +2,9 @@
 
 const path = require("path");
 
-module.exports = async function () {
+module.exports = async function (isDebug) {
   return {
-    level: "info",
+    level: isDebug ? "debug" : "info",
     transport: {
       target: "pino/file",
       options: {

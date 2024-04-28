@@ -14,6 +14,7 @@ import {
 } from "mte";
 import { setItem, takeItem } from "./memory-cache";
 import { MteRelayError } from "./errors";
+import { getLogger } from "../log";
 
 type EncDecTypes = "MTE" | "MKE";
 
@@ -41,17 +42,20 @@ function fillPools(max: number) {
     mteDecoderPool.push(MteDec.fromdefault(mteWasm));
     i++;
   }
+  getLogger().debug(`Encoder / Decoder pools filled to ${MAX_POOL_SIZE}.`);
 }
 function getEncoderFromPool(type: EncDecTypes) {
   if (type === "MTE") {
     const encoder = mteEncoderPool.pop();
     if (!encoder) {
+      getLogger().debug("MTE Encoder pool empty. Creating new instance.");
       return MteEnc.fromdefault(mteWasm);
     }
     return encoder;
   }
   const encoder = mkeEncoderPool.pop();
   if (!encoder) {
+    getLogger().debug("MKE Encoder pool empty. Creating new instance.");
     return MteMkeEnc.fromdefault(mteWasm);
   }
   return encoder;
@@ -60,12 +64,14 @@ function getDecoderFromPool(type: EncDecTypes) {
   if (type === "MTE") {
     const decoder = mteDecoderPool.pop();
     if (!decoder) {
+      getLogger().debug("MTE Decoder pool empty. Creating new instance.");
       return MteDec.fromdefault(mteWasm, 1000, -63);
     }
     return decoder;
   }
   const decoder = mkeDecoderPool.pop();
   if (!decoder) {
+    getLogger().debug("MKE Decoder pool empty. Creating new instance.");
     return MteMkeDec.fromdefault(mteWasm, 1000, -63);
   }
   return decoder;
@@ -76,12 +82,14 @@ function returnEncoderToPool(encoder: MteMkeEnc | MteEnc) {
       encoder.uninstantiate();
       return mteEncoderPool.push(encoder);
     }
+    getLogger().debug("MTE Encoder pool full. Destructing instance.");
     return encoder.destruct();
   }
   if (mkeEncoderPool.length < MAX_POOL_SIZE) {
     encoder.uninstantiate();
     return mkeEncoderPool.push(encoder);
   }
+  getLogger().debug("MKE Encoder pool full. Destructing instance.");
   return encoder.destruct();
 }
 function returnDecoderToPool(decoder: MteMkeDec | MteDec) {
@@ -90,12 +98,14 @@ function returnDecoderToPool(decoder: MteMkeDec | MteDec) {
       decoder.uninstantiate();
       return mteDecoderPool.push(decoder);
     }
+    getLogger().debug("MTE Decoder pool full. Destructing instance.");
     return decoder.destruct();
   }
   if (mkeDecoderPool.length < MAX_POOL_SIZE) {
     decoder.uninstantiate();
     return mkeDecoderPool.push(decoder);
   }
+  getLogger().debug("MKE Decoder pool full. Destructing instance.");
   return decoder.destruct();
 }
 
@@ -145,6 +155,10 @@ export async function instantiateEncoder(options: {
   const initResult = encoder.instantiate(options.personalization);
   validateStatusIsSuccess(initResult, encoder);
   const state = getMteState(encoder);
+  getLogger().debug(
+    "Create New Encoder: " +
+      JSON.stringify({ ...options, entropy: options.entropy.toString(), state })
+  );
   await cache.saveState(options.id, state);
   returnEncoderToPool(encoder);
 }
@@ -160,6 +174,10 @@ export async function instantiateDecoder(options: {
   const initResult = decoder.instantiate(options.personalization);
   validateStatusIsSuccess(initResult, decoder);
   const state = getMteState(decoder);
+  getLogger().debug(
+    "Create New Decoder: " +
+      JSON.stringify({ ...options, entropy: options.entropy.toString(), state })
+  );
   await cache.saveState(options.id, state);
   returnDecoderToPool(decoder);
 }
@@ -171,9 +189,11 @@ export async function encode(options: {
     output: "B64" | "Uint8Array" | "stream";
   }[];
 }) {
+  const logger = getLogger();
   if (options.type === "MTE") {
     const hasStream = options.items.some((item) => item.output === "stream");
     if (hasStream) {
+      logger.info("MTE does not support streaming. Use MKE instead.");
       throw new Error("MTE does not support streaming. Use MKE instead.");
     }
   }
@@ -196,8 +216,10 @@ export async function encode(options: {
     }
     validateStatusIsSuccess(nextStateResult, encoder);
     const nextState = getMteState(encoder);
+    logger.debug(`MKE Next State Generation: ${nextState}`);
     await cache.saveState(options.id, nextState);
     restoreMteState(encoder, currentState);
+    logger.debug(`MKE rolled back to original state: ${currentState}`);
   }
   let encodeResults: (
     | String
@@ -245,6 +267,7 @@ export async function encode(options: {
       );
     }
   } catch (error) {
+    logger.debug(`Failed to encode: ${(error as Error).message}`);
     returnEncoderToPool(encoder);
     throw new MteRelayError("Failed to encode.", {
       stateId: options.id,
@@ -268,14 +291,17 @@ export async function decode(options: {
     output: "str" | "Uint8Array" | "stream";
   }[];
 }) {
+  const logger = getLogger();
   if (options.type === "MTE") {
     const hasStream = options.items.some((data) => data.output === "stream");
     if (hasStream) {
+      logger.info("MTE does not support streaming. Use MKE instead.");
       throw new Error("MTE does not support streaming. Use MKE instead.");
     }
   }
   const currentState = await cache.takeState(options.id);
   if (!currentState) {
+    logger.error("State not found for decoder " + options.id + ".");
     throw new MteRelayError("State not found.", {
       stateId: options.id,
     });
@@ -332,6 +358,7 @@ export async function decode(options: {
     }
   } catch (error) {
     returnDecoderToPool(decoder);
+    logger.error(`Failed to decode: ${(error as Error).message}`);
     throw new MteRelayError("Failed to decode.", {
       stateId: options.id,
       error: (error as Error).message,
@@ -344,12 +371,14 @@ export async function decode(options: {
   }
   return decodeResults;
 }
+
 function validateStatusIsSuccess(status: MteStatus, mteBase: MteBase) {
   if (status !== MteStatus.mte_status_success) {
     const isError = mteBase.statusIsError(status);
     if (isError) {
       const statusName = mteBase.getStatusName(status);
       const description = mteBase.getStatusDescription(status);
+      getLogger().debug(`Error Status: ${statusName} - ${description}`);
       throw new MteRelayError("MTE Status was not successful.", {
         statusName,
         description,
@@ -403,7 +432,6 @@ export function getKyberInitiator() {
     decryptSecret,
   };
 }
-
 export function getKyberResponder(b64String: string) {
   const publicKey = B64ToU8(b64String);
   const responder = new MteKyber(mteWasm, MteKyberStrength.K512);
@@ -423,7 +451,6 @@ export function getKyberResponder(b64String: string) {
 function u8ToB64(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString("base64");
 }
-
 function B64ToU8(base64: string): Uint8Array {
   return new Uint8Array(Buffer.from(base64, "base64"));
 }

@@ -44,6 +44,7 @@ function proxyHandler(
   fastify.addHook("onRequest", (request, reply, _done) => {
     if (request.isOutbound) {
       // do we log outbound requests?
+      fastify.log.info(`Outbound Proxy Route used: ${request.url}`);
       return _done();
     }
 
@@ -108,6 +109,7 @@ function proxyHandler(
       if (request.relayOptions.urlIsEncoded) {
         const uriDecodeUrl = decodeURIComponent(request.url.slice(1));
         if (uriDecodeUrl.length > 0) {
+          request.log.debug(`Adding path to decode: ${uriDecodeUrl}`);
           itemsToDecode.push({ data: uriDecodeUrl, output: "str" });
         }
       }
@@ -118,6 +120,7 @@ function proxyHandler(
           options.encodedHeadersHeader
         ] as string;
         if (encodedHeaders) {
+          request.log.debug(`Add headers to decode: ${encodedHeaders}`);
           itemsToDecode.push({ data: encodedHeaders, output: "str" });
         }
       }
@@ -149,12 +152,14 @@ function proxyHandler(
       let decryptedUrl = request.url.slice(1);
       if (request.relayOptions.urlIsEncoded) {
         decryptedUrl = result[0] as string;
+        request.log.debug(`Decoded URL: ${decryptedUrl}`);
         result.shift();
       }
 
       // clone request headers
       const proxyHeaders = new Headers();
       Object.entries(request.headers).forEach((entry) => {
+        request.log.debug(`Setting decrypted header: ${entry[0]}: ${entry[1]}`);
         proxyHeaders.set(entry[0], entry[1] as string);
       });
 

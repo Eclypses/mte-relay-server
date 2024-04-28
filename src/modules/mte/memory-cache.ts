@@ -10,7 +10,8 @@ const store = new Map();
 
 // Put an Item in the store
 export async function setItem(id: string, value: string) {
-  store.set(id, value);
+  const timestamp = Date.now();
+  store.set(id, { value, timestamp });
 }
 
 /**
@@ -23,5 +24,16 @@ export async function takeItem(id: string): Promise<string | null> {
   if (id.includes("encoder")) {
     store.delete(id);
   }
-  return item;
+  return item.value;
 }
+
+// delete items more than 30m (in ms) old
+function checkAndDeleteOldItems() {
+  const now = Date.now();
+  for (const [id, { timestamp }] of store.entries()) {
+    if (now - timestamp > 1800000) {
+      store.delete(id);
+    }
+  }
+}
+setInterval(checkAndDeleteOldItems, 60000); // 1m

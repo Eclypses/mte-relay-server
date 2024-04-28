@@ -1,6 +1,7 @@
+import { FastifyBaseLogger } from "fastify";
 import path from "path";
 
-export default async function () {
+export default async function (isDebug: boolean) {
   // dynamically inject logger from consumer, if it exists
   const flagIndex = process.argv.indexOf("--log-adapter");
   if (flagIndex > -1) {
@@ -9,7 +10,7 @@ export default async function () {
     try {
       // Dynamically import the module
       const logAdapter = await import(filePath);
-      const transport = await logAdapter.default();
+      const transport = await logAdapter.default(isDebug);
       return transport;
     } catch (error) {
       console.error(`Failed to load log adapter: ${filePath}`);
@@ -29,4 +30,12 @@ export default async function () {
       },
     },
   };
+}
+
+let log: FastifyBaseLogger;
+export function setLogger(logger: FastifyBaseLogger) {
+  log = logger;
+}
+export function getLogger() {
+  return log;
 }

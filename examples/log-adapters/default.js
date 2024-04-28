@@ -1,7 +1,7 @@
 // Use default Fastify logger
 // https://fastify.dev/docs/latest/Reference/Logging/
 
-module.exports = async function () {
+module.exports = async function (isDebug) {
   return true;
 };
 

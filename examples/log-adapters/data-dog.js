@@ -1,9 +1,9 @@
 // https://github.com/theogravity/pino-datadog-transport
 
-module.exports = async function () {
+module.exports = async function (isDebug) {
   return {
     transport: {
-      level: "info",
+      level: isDebug ? "debug" : "info",
       target: "pino-datadog-transport",
       options: {
         ddServerConf: {

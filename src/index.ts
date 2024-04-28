@@ -4,7 +4,7 @@ import crypto from "crypto";
 
 import settings from "./modules/settings";
 import { startupChecks } from "./modules/startup-checks";
-import getLogSettings from "./modules/log";
+import getLogSettings, { setLogger } from "./modules/log";
 import mteInit from "./modules/mte-init";
 import headers from "./modules/headers";
 import { publicRoutes } from "./modules/public-routes";
@@ -24,9 +24,11 @@ let server: FastifyInstance | null = null;
 
     // create fastify server instance
     server = Fastify({
-      logger: await getLogSettings(),
+      logger: await getLogSettings(SETTINGS.DEBUG),
       genReqId: () => crypto.randomUUID(),
     });
+    setLogger(server.log);
+    server.log.debug(SETTINGS, "Settings");
 
     // Register cors plugins
     await server.register(cors, {
@@ -82,7 +84,7 @@ let server: FastifyInstance | null = null;
     });
 
     await server.listen({ port: SETTINGS.PORT, host: "0.0.0.0" });
-    console.log(`Server listening on port ${SETTINGS.PORT}`);
+    server.log.info(`Server listening on port ${SETTINGS.PORT}`);
   } catch (err) {
     console.log(err);
     server?.log.error(err);
