@@ -1,0 +1,48 @@
+# The upstream server to proxy requests to
+upstream: https://api.example.com
+
+# The registered name of your company. From https://developers.eclypses.com
+licenseCompany: Example, LLC.
+
+# The license key for your company. From https://developers.eclypses.com
+licenseKey: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+# A secret key used to sign client IDs. 32+ character string is recommended.
+clientIdSecret: abcdefghijklmnopqrstuvwxyz0123456789
+
+# The websites that are allowed to talk to this relay server
+corsOrigins:
+  - https://www.example.com
+  - https://dashboard.example.com
+  - http://localhost:3000
+
+# An access token required to generate an MTE Usage report
+# via this path: /api/mte-report/:accessToken
+reportAccessToken: zzzzzzzzzzzzzzzzzzzzzzzzzzzzz
+# [OPTIONAL] Enable debug logging
+# debug: true
+# [OPTIONAL] Add custom headers to every request/response
+# headers:
+#   test: test-header
+
+# [OPTIONAL] Listen on this port. Must match EXPOSE port in Dockerfile.
+# port: 8080
+
+# [OPTIONAL] Pass-through routes, with no MTE Encryption
+# passThroughRoutes:
+#   - /api/example/1
+#   - /api/example/2
+
+# [OPTIONAL] MTE routes to expect. If this is included, only these routes will be allowed.
+# mteRoutes:
+#   - /api/login
+#   - /api/auth-check
+#   - /api/logout
+
+# [OPTIONAL] Define allowed CORS methods. Below values match default values.
+# corsMethods:
+#   - GET
+#   - POST
+#   - PUT
+#   - DELETE
+
