@@ -1,0 +1,54 @@
+{
+  "name": "mte-relay-server",
+  "version": "4.2.9",
+  "description": "",
+  "scripts": {
+    "start": "node --inspect --trace-warnings dist/index.js --log-adapter ../examples/log-adapters/stdout.js",
+    "dev": "nodemon --watch src src/index.ts -- --log-adapter ../../examples/log-adapters/stdout.js",
+    "dev:custom": "nodemon src/index.ts --settings ./mte-relay-config.js",
+    "debug": "nodemon --exec \"node --inspect=0.0.0.0:9229 --require ts-node/register src/index.ts --log-adapter ../../examples/log-adapters/stdout.js\"",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node18 --outfile=dist/index.js --packages=external --sourcemap=external",
+    "build:docker": "npm run build && docker build -t mte-relay-server .",
+    "publish:dry-run": "npm publish --dry-run",
+    "publish:beta": "npm run build && npm publish --tag beta",
+    "publish:prod": "npm run build && npm publish"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "./dist/index.js",
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^8.5.0",
+    "@fastify/static": "^7.0.1",
+    "fastify": "^4.26.0",
+    "fastify-plugin": "^4.5.1",
+    "node-fetch": "^2.7.0",
+    "yaml": "^2.3.1",
+    "zod": "^3.21.4"
+  },
+  "peerDependencies": {
+    "mte": "npm:@eclypses/eclypses-inc-aws-server-aws-config-with-kyber@^4.2.0"
+  },
+  "devDependencies": {
+    "@autotelic/pino-seq-transport": "^0.1.0",
+    "@aws-sdk/client-cloudwatch-logs": "^3.405.0",
+    "@aws-sdk/client-marketplace-metering": "^3.470.0",
+    "@serdnam/pino-cloudwatch-transport": "^1.0.4",
+    "@types/node-fetch": "^2.6.11",
+    "dotenv": "^16.3.1",
+    "esbuild": "0.17.11",
+    "memcached": "^2.2.2",
+    "nodemon": "^3.0.2",
+    "pino-datadog-transport": "^1.3.0",
+    "pino-pretty": "^10.0.1",
+    "redis": "^4.6.7",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Eclypses/mte-relay-server"
+  }
+}
